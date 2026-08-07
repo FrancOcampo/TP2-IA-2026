@@ -1,0 +1,110 @@
+@startuml architecture
+title TP2 — Arquitectura de alto nivel (separación de módulos + orquestación LangGraph)
+
+skinparam componentStyle rectangle
+skinparam wrapWidth 200
+skinparam maxMessageSize 160
+skinparam package {
+  BackgroundColor<<ui>> #EAF2FB
+  BackgroundColor<<orch>> #FDF3E3
+  BackgroundColor<<agents>> #EAF7EC
+  BackgroundColor<<tools>> #F3EAF7
+  BackgroundColor<<rag>> #FCEAEA
+  BackgroundColor<<infra>> #ECECEC
+}
+
+package "interface\n(Gradio UI)" <<ui>> {
+  [app.py] as UI_APP
+  [components.py] as UI_COMPONENTS
+  [logging_config.py] as UI_LOG
+  UI_APP --> UI_COMPONENTS
+  UI_APP --> UI_LOG
+}
+
+package "orchestrator\n(LangGraph)" <<orch>> {
+  [state.py\n(AgentState + modelos Pydantic)] as ST
+  [router.py\n(heurística followup/confirmación)] as ROUTER
+  component "graph.py" as GRAPH {
+    [orchestrator_node] as N_ORCH
+    [monitor_node] as N_MON
+    [clinical_node] as N_CLIN
+  }
+  GRAPH --> ST : lee/escribe
+  N_ORCH --> ROUTER : consulta routing
+  N_ORCH --> N_MON : pipeline (consulta nueva)
+  N_ORCH --> N_CLIN : followup (directo)
+  N_MON --> N_CLIN : siempre
+  N_CLIN --> N_MON : refinamiento\n(information_sufficient=False,\nguardrail 3 iteraciones)
+}
+
+package "agents\n(ReAct loops)" <<agents>> {
+  [monitor.py\nrun_monitor_agent] as AG_MON
+  [clinical.py\nrun_clinical_agent] as AG_CLIN
+  [prompts.py] as AG_PROMPTS
+  [llm_factory.py\nbuild_llm / has_api_key] as AG_FACTORY
+  AG_MON --> AG_PROMPTS
+  AG_CLIN --> AG_PROMPTS
+  AG_MON --> AG_FACTORY
+  AG_CLIN --> AG_FACTORY
+}
+
+package "tools\n(determinísticas)" <<tools>> {
+  [patient_tools.py\ncalculate_stats, load_patient_data] as T_PATIENT
+  [threshold_tools.py\ndetect_threshold_violations (umbrales ADA)] as T_THRESH
+  [mongo_tools.py\nget_patient_history, compare_sessions] as T_MONGO
+  [rag_tools.py\nsearch_clinical_guidelines_tool] as T_RAG
+}
+
+package "rag\n(pipeline vectorial)" <<rag>> {
+  [ingest.py\n(indexa guías → ChromaDB)] as RAG_INGEST
+  [retriever.py\nsearch_clinical_guidelines] as RAG_RETRIEVER
+}
+
+package "Infraestructura externa" <<infra>> {
+  database "MongoDB\n(tp2_diabetes.patients)" as DB_MONGO
+  database "ChromaDB\n(data/chroma_db)" as DB_CHROMA
+  [Ollama\nnomic-embed-text\n:11434] as SVC_OLLAMA
+  cloud "Groq / Gemini\n(LLM API)" as SVC_LLM
+  file "data/sample/*.csv\n(fixture EHR)" as FILE_CSV
+  folder "data/guias/*.md" as FILE_GUIAS
+}
+
+' -------- Flujo principal --------
+UI_APP --> GRAPH : langgraph_app.invoke(state, thread_id)
+
+N_MON ..> AG_MON : si hay API key
+N_MON ..> N_MON : fallback determinístico\n(sin API key → llama tools directo)
+N_CLIN ..> AG_CLIN : si hay API key
+N_CLIN ..> N_CLIN : fallback determinístico
+
+AG_FACTORY --> SVC_LLM : ChatGroq / ChatGoogleGenerativeAI
+
+AG_MON --> T_PATIENT : tool_calculate_stats,\ntool_load_patient_data
+AG_MON --> T_THRESH : tool_detect_threshold_violations
+AG_MON ..> ST : produce MonitorAnalysis
+
+AG_CLIN --> T_MONGO : tool_get_patient_history,\ntool_compare_with_previous_sessions
+AG_CLIN --> T_RAG : tool_search_clinical_guidelines
+AG_CLIN ..> ST : produce report + rag_context
+
+T_PATIENT --> FILE_CSV
+T_MONGO --> DB_MONGO
+T_RAG --> RAG_RETRIEVER
+RAG_RETRIEVER --> DB_CHROMA
+RAG_RETRIEVER --> SVC_OLLAMA : embeddings de la query
+RAG_INGEST --> FILE_GUIAS : lee y chunkea
+RAG_INGEST --> SVC_OLLAMA : embeddings de los chunks
+RAG_INGEST --> DB_CHROMA : indexa (batch)
+
+note bottom of GRAPH
+  **Loop de refinamiento** (orchestrator/graph.py):
+  Orquestador → Monitor → Clínico → (¿info insuficiente? → Monitor)
+  hasta información suficiente o guardrail de 3 iteraciones.
+end note
+
+note right of AG_FACTORY
+  Proveedor LLM intercambiable vía
+  env var LLM_PROVIDER=groq|gemini
+end note
+
+@enduml
