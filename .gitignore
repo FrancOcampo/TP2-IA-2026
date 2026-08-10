@@ -234,3 +234,6 @@ logs/*
 # al generador real de B. Cuando B entregue data/generate_patients.py, su salida (al mismo
 # schema) reemplaza estos archivos y el resto de CSV generados siguen ignorados.
 !data/sample/*.csv
+
+# graphify: grafo de conocimiento regenerable (graphify extract/update .)
+graphify-out/
