@@ -198,3 +198,36 @@ uv run pytest                        # toda la suite (requiere modo completo: in
 uv run python -m interface.app       # levantar la interfaz web
 uv lock                              # regenerar el lockfile tras cambiar dependencias
 ```
+
+---
+
+## Herramientas de desarrollo: graphify
+
+El repo trae configurado [graphify](https://github.com/Graphify-Labs/graphify) para asistentes de código
+(skill en `.claude/skills/graphify/` y hooks en `.claude/settings.json`). Los hooks llaman a `graphify`
+por PATH, así que **cada integrante tiene que instalarlo** (si no, el asistente muestra un error no
+bloqueante en cada lectura). Decisión y detalles: [ADR-0002](docs/adr/0002-graphify-para-navegacion-del-codigo.md).
+
+```bash
+uv tool install "graphifyy[office]"        # paquete oficial en PyPI (ojo: doble "y"; [office] lee .docx)
+graphify install --project --platform claude   # (re)instala skill + hooks si hace falta
+```
+
+Construir el índice completo (código + documentos + diagramas) desde Claude Code:
+
+```
+/graphify .            # primera vez: AST local + paso semántico con subagentes del asistente
+/graphify . --update   # después: re-extrae solo lo que cambió (docs incluidos)
+```
+
+Mantenimiento y consultas desde la terminal (sin costo de LLM):
+
+```bash
+graphify update .                          # refresca SOLO el código tras cambios
+graphify query "¿qué nodos usan AgentState?"
+```
+
+Punto de entrada para navegar: `graphify-out/wiki/index.md`. Qué queda afuera del grafo (guías clínicas,
+capturas, archivos de la skill): ver `.graphifyignore`.
+
+`graphify-out/` no se versiona: es un artefacto regenerable.

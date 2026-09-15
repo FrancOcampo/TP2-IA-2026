@@ -1,3 +1,10 @@
+## Proyecto
+
+- Guía completa del proyecto (arquitectura, convenciones, estado): [docs/CLAUDE.md](docs/CLAUDE.md).
+- Fuente de verdad de las correcciones pendientes: [docs/plan_correcciones.md](docs/plan_correcciones.md) (issues EAS-* en Linear).
+- Toda decisión de arquitectura se registra como ADR en [docs/adr/](docs/adr/README.md), en el mismo cambio que la implementa.
+- Ramas con Gitflow: `feature/<ISSUE-ID>-<slug>` desde `develop`.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
