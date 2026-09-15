@@ -1,0 +1,12 @@
+# graphify: qué NO entra al grafo de conocimiento del proyecto (sintaxis .gitignore).
+# Motivo y alcance: docs/adr/0002-graphify-para-navegacion-del-codigo.md
+
+# Archivos de la propia skill de graphify (no son conocimiento del proyecto)
+.claude/
+
+# Guías clínicas: corpus del RAG (ChromaDB). ~25 000 líneas; indexarlas acá duplica el RAG
+# y es el paso más caro de la extracción semántica.
+data/guias/
+
+# Capturas de pantalla de la UI (una llamada de visión por imagen, poco valor para el grafo)
+docs/capturas/
