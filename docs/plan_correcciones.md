@@ -29,7 +29,7 @@
 **Comando de verificación base**
 
 ```bash
-uv run pytest -m "not integration and not llm"      # gate determinístico (hoy: 45 passed, 9 xfailed)
+uv run pytest -m "not integration and not llm"      # gate determinístico (hoy: 49 passed, 8 xfailed)
 uv run pytest -m integration                         # requiere MongoDB + Ollama + ChromaDB indexado
 uv run python tests/eval_runner.py                   # evaluación cualitativa con LLM real
 ```
@@ -43,7 +43,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | ID | Linear | Título | Severidad | Depende de | Estado |
 |---|---|---|---|---|---|
 | **F0-01** | [EAS-5](https://linear.app/easymetricdev/issue/EAS-5) | Tests de reproducción de bugs | — | — | ✅ |
-| **F1-01** | [EAS-6](https://linear.app/easymetricdev/issue/EAS-6) | Paciente inexistente / métricas sin datos informados como "controlado" | 🔴 Crítica | F0-01 | ⬜ |
+| **F1-01** | [EAS-6](https://linear.app/easymetricdev/issue/EAS-6) | Paciente inexistente / métricas sin datos informados como "controlado" | 🔴 Crítica | F0-01 | ✅ |
 | **F1-02** | [EAS-7](https://linear.app/easymetricdev/issue/EAS-7) | Contaminación de estado al cambiar de paciente en el mismo thread | 🔴 Crítica | F0-01 | ⬜ |
 | **F1-03** | [EAS-8](https://linear.app/easymetricdev/issue/EAS-8) | La respuesta de seguimiento sobrescribe el reporte | 🟠 Alta | F0-01 | ⬜ |
 | **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ⬜ |
@@ -151,10 +151,12 @@ Al corregir el ítem se quita el `xfail`: `strict=True` obliga a hacerlo (un xfa
 **Archivos:** `orchestrator/state.py`, `orchestrator/graph.py`, `agents/monitor.py`, `interface/app.py`, `interface/components.py`, tests.
 
 **Aceptación**
-- [ ] `test_paciente_inexistente_no_reporta_controlado` pasa sin `xfail`.
-- [ ] P004 → `analysis.insufficient_data` contiene las 6 métricas; ninguna stat es `0.0` inventada.
-- [ ] En la UI, `PX99` muestra "No hay datos de EHR…" y no muestra tabla de alertas.
-- [ ] Caso `adv_03` del eval: el reporte no contiene métricas.
+- [x] `test_paciente_inexistente_no_reporta_controlado` pasa sin `xfail` (+ `test_paciente_inexistente_no_invoca_al_clinico`).
+- [x] P004 → `analysis.insufficient_data` contiene las 6 métricas; ninguna stat es `0.0` inventada (`test_datos_insuficientes_explicitos_p004`).
+- [x] En la UI, `PX99` muestra "No hay datos de EHR…" y no muestra tabla de alertas (`app.analyze`; `test_ui_metricas_sin_datos_se_muestran_como_sin_datos`).
+- [ ] Caso `adv_03` del eval: el reporte no contiene métricas (requiere corrida con LLM real).
+
+**Decisión registrada:** [ADR-0003](adr/0003-no-inventar-valores-clinicos.md). Además de lo previsto, `MonitorAnalysis.blood_pressure_stats` pasa a tener `systolic`/`diastolic` opcionales y `test_graph.py::test_pipeline_completo` deja de usar un paciente inexistente (`P123` → `P001`).
 
 ---
 

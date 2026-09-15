@@ -77,7 +77,7 @@ def tool_load_patient_data(patient_id: str) -> str:
             "metrics_available": list(SERIES_METRICS),
             "has_cgm": metrics.cgm_series is not None,
         }, ensure_ascii=False)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
@@ -173,6 +173,10 @@ MONITOR_TOOLS = [
 # Máximo de iteraciones del loop ReAct del Monitor (guardrail interno del agente,
 # distinto del guardrail de 3 iteraciones del grafo orquestador-monitor-clínico).
 _MAX_MONITOR_STEPS = 20
+
+# Registros mínimos de una métrica para poder evaluar su evolución (por debajo, va a
+# `insufficient_data`; ADR-0003).
+_MIN_RECORDS_FOR_TREND = 2
 
 
 def _build_monitor_llm():
@@ -313,20 +317,27 @@ def _build_analysis(
     """
     Construye el MonitorAnalysis a partir de los resultados acumulados de las tools.
 
-    Si el LLM no llamó a una tool para alguna métrica, la ejecutamos acá como fallback
-    (garantiza que MonitorAnalysis siempre tenga las 6 métricas + alertas + medicación).
+    Si el LLM no llamó a una tool para alguna métrica, la ejecutamos acá como fallback.
+    Nunca se inventan valores (ADR-0003): una métrica sin registros queda con stats `None`, y
+    las que tienen menos de `_MIN_RECORDS_FOR_TREND` registros se declaran en `insufficient_data`.
+    Requiere que el paciente tenga datos en el EHR (lo verifica el nodo Monitor antes).
     """
-    # Asegurar que todas las métricas tengan stats
+    metrics_history = load_patient_data(patient_id)
+    insufficient_data: dict[str, str] = {}
+
     for metric in SERIES_METRICS:
+        n_records = len(getattr(metrics_history, metric))
+        if n_records < _MIN_RECORDS_FOR_TREND:
+            insufficient_data[metric] = (
+                f"{n_records} registro(s); se requieren al menos {_MIN_RECORDS_FOR_TREND} "
+                "para evaluar la evolución"
+            )
         if metric not in collected_stats:
             try:
                 collected_stats[metric] = calculate_stats(patient_id, metric)
-            except (ValueError, FileNotFoundError):
-                # Si no hay datos, crear stats vacíos con un valor placeholder
-                collected_stats[metric] = MetricStats(
-                    last_value=0.0, mean=0.0, min_value=0.0,
-                    max_value=0.0, delta=0.0, direction="estable",
-                )
+            except ValueError:
+                # Sin registros para la métrica: se deja sin stats en lugar de inventar valores
+                insufficient_data[metric] = "sin registros"
 
     # Asegurar que se chequearon violaciones para las métricas con umbral
     checked_alert_metrics = {a.metric for a in collected_alerts}
@@ -348,25 +359,19 @@ def _build_analysis(
     )
 
     return MonitorAnalysis(
-        glucose_fasting_stats=collected_stats.get("glucose_fasting", _empty_stats()),
-        hba1c_stats=collected_stats.get("hba1c", _empty_stats()),
-        glucose_postprandial_stats=collected_stats.get("glucose_postprandial", _empty_stats()),
-        weight_stats=collected_stats.get("weight", _empty_stats()),
+        glucose_fasting_stats=collected_stats.get("glucose_fasting"),
+        hba1c_stats=collected_stats.get("hba1c"),
+        glucose_postprandial_stats=collected_stats.get("glucose_postprandial"),
+        weight_stats=collected_stats.get("weight"),
         blood_pressure_stats=BloodPressureStats(
-            systolic=collected_stats.get("blood_pressure_systolic", _empty_stats()),
-            diastolic=collected_stats.get("blood_pressure_diastolic", _empty_stats()),
+            systolic=collected_stats.get("blood_pressure_systolic"),
+            diastolic=collected_stats.get("blood_pressure_diastolic"),
         ),
         cgm_metrics=None,  # CGM fuera de alcance
         alerts=collected_alerts,
         medication=collected_meds,
         requires_rag=has_moderate_or_severe,
         requires_longitudinal_comparison=has_moderate_or_severe,
-    )
-
-
-def _empty_stats() -> MetricStats:
-    """MetricStats con valores por defecto (caso de error o datos no disponibles)."""
-    return MetricStats(
-        last_value=0.0, mean=0.0, min_value=0.0,
-        max_value=0.0, delta=0.0, direction="estable",
+        insufficient_data=insufficient_data,
+        records_count=len(metrics_history.dates),
     )

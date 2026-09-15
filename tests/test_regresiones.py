@@ -52,7 +52,6 @@ def _analizar(app, patient_id: str, thread_id: str) -> dict:
 # F1-01 · Paciente inexistente informado como "controlado"
 # -------------------------------------------------------------------
 
-@_xfail("F1-01")
 def test_paciente_inexistente_no_reporta_controlado(app):
     out = _analizar(app, "PX99", "t-px99")
 
@@ -60,6 +59,40 @@ def test_paciente_inexistente_no_reporta_controlado(app):
     assert "controlado" not in report, "un paciente sin datos no puede figurar como controlado"
     assert out.get("analysis") is None, "no debe haber análisis con valores inventados"
     assert out.get("error"), "debe informarse explícitamente que no hay datos del paciente"
+
+
+def test_paciente_inexistente_no_invoca_al_clinico(app):
+    out = _analizar(app, "PX99", "t-px99-flow")
+
+    assert out.get("report") is None, "sin datos no se genera reporte clínico"
+    assert out["iteration"] == 0, "el Clínico no debe ejecutarse"
+
+
+def test_datos_insuficientes_explicitos_p004(app):
+    """P004 tiene un único registro: ninguna métrica permite evaluar evolución."""
+    from tools.patient_tools import SERIES_METRICS
+
+    analysis = _analizar(app, "P004", "t-p004-insuf")["analysis"]
+
+    assert set(analysis.insufficient_data) == set(SERIES_METRICS)
+    assert analysis.records_count == 1
+    assert analysis.hba1c_stats.last_value == 6.5, "los valores reales del registro se conservan"
+
+
+def test_ui_metricas_sin_datos_se_muestran_como_sin_datos():
+    from interface.components import trends_view
+    from orchestrator.state import BloodPressureStats, MonitorAnalysis
+
+    analysis = MonitorAnalysis(
+        blood_pressure_stats=BloodPressureStats(),
+        alerts=[], medication=[], requires_rag=False, requires_longitudinal_comparison=False,
+        insufficient_data={"hba1c": "sin registros"},
+    )
+    vista = trends_view(analysis)
+
+    assert "sin datos" in vista
+    assert "0.0" not in vista and "| 0 |" not in vista, "no se muestran valores inventados"
+    assert "Datos insuficientes" in vista
 
 
 # -------------------------------------------------------------------

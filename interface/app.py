@@ -102,6 +102,14 @@ def analyze(patient_id: str, doctor_context: str):
         err = f"⚠️ Error al ejecutar el análisis: {e}"
         return [{"role": "assistant", "content": err}], thread_id, format_report(None), alerts_table([]), trends_view(None)
 
+    # Paciente sin datos en el EHR: se informa y no se muestran alertas ni tendencias (ADR-0003)
+    error = out.get("error")
+    if error:
+        aviso = f"⚠️ {error}"
+        sin_datos = "_Sin análisis: no hay datos del paciente en el EHR._"
+        reporte = f"### {aviso}\n\nNo se generó reporte: el sistema no analiza pacientes sin datos."
+        return [{"role": "assistant", "content": aviso}], thread_id, format_report(reporte), sin_datos, sin_datos
+
     analysis = out.get("analysis")
     alerts = analysis.alerts if analysis else []
     chat = [{

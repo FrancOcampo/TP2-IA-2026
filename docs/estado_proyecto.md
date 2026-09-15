@@ -150,7 +150,7 @@ MongoDB + ChromaDB reales levantados.
 
 ```bash
 uv sync                              # entorno (147 paquetes; idempotente)
-uv run pytest -m "not integration and not llm"   # gate determinístico: 45 passed, 9 deselected, 9 xfailed
+uv run pytest -m "not integration and not llm"   # gate determinístico: 49 passed, 9 deselected, 8 xfailed
 uv run python -m interface.app       # UI en http://127.0.0.1:7860
 ```
 
