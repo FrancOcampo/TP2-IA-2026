@@ -34,7 +34,7 @@ def _cfg(thread_id):
 
 def test_pipeline_completo(app):
     """Consulta nueva → Monitor → Clínico, termina con reporte."""
-    init = {"patient_id": "P123", "query": "Analizá al paciente", "conversation": []}
+    init = {"patient_id": "P001", "query": "Analizá al paciente", "conversation": []}
     out = app.invoke(init, _cfg("t-pipeline"))
 
     assert out["is_followup"] is False
@@ -46,7 +46,7 @@ def test_pipeline_completo(app):
 
 def test_followup_va_directo_al_clinico(app):
     """Con reporte previo, una pregunta de seguimiento no recalcula el Monitor."""
-    init = {"patient_id": "P123", "query": "Analizá al paciente", "conversation": []}
+    init = {"patient_id": "P001", "query": "Analizá al paciente", "conversation": []}
     app.invoke(init, _cfg("t-follow"))
     out = app.invoke({"query": "¿Qué significa la HbA1c?"}, _cfg("t-follow"))
 
@@ -55,7 +55,7 @@ def test_followup_va_directo_al_clinico(app):
 
 def test_confirmacion_termina_sin_agentes(app):
     """'confirmar' marca awaiting_confirmation y corta el flujo."""
-    init = {"patient_id": "P123", "query": "Analizá al paciente", "conversation": []}
+    init = {"patient_id": "P001", "query": "Analizá al paciente", "conversation": []}
     app.invoke(init, _cfg("t-confirm"))
     out = app.invoke({"query": "confirmar"}, _cfg("t-confirm"))
 

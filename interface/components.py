@@ -110,7 +110,9 @@ def alerts_table(alerts: list[Alert]) -> str:
 # Visualización de tendencias
 # -------------------------------------------------------------------
 
-def _trend_row(label: str, stats: MetricStats) -> str:
+def _trend_row(label: str, stats: Optional[MetricStats]) -> str:
+    if stats is None:  # métrica sin registros: no se inventan valores (ADR-0003)
+        return f"| {label} | — | — | — | — | — | sin datos |"
     arrow = _DIRECTION_ARROW.get(stats.direction, "")
     return (
         f"| {label} | {_fmt(stats.last_value)} | {_fmt(stats.mean)} | "
@@ -122,7 +124,8 @@ def _trend_row(label: str, stats: MetricStats) -> str:
 def trends_view(analysis: Optional[MonitorAnalysis]) -> str:
     """
     Tabla Markdown con las estadísticas por métrica (último, media, mín, máx, Δ, tendencia).
-    Devuelve un aviso si todavía no hay análisis del Monitor.
+    Devuelve un aviso si todavía no hay análisis del Monitor, y lista las métricas con datos
+    insuficientes para evaluar su evolución.
     """
     if analysis is None:
         return "_Sin análisis del Monitor todavía. Ejecutá un análisis para ver las tendencias._"
@@ -137,6 +140,11 @@ def trends_view(analysis: Optional[MonitorAnalysis]) -> str:
         _trend_row(METRIC_LABELS["blood_pressure_systolic"], analysis.blood_pressure_stats.systolic),
         _trend_row(METRIC_LABELS["blood_pressure_diastolic"], analysis.blood_pressure_stats.diastolic),
     ]
+    if analysis.insufficient_data:
+        filas.append("")
+        filas.append("⚠️ **Datos insuficientes para evaluar la evolución:**")
+        for metric, motivo in analysis.insufficient_data.items():
+            filas.append(f"- {METRIC_LABELS.get(metric, metric)}: {motivo}")
     return "\n".join(filas)
 
 

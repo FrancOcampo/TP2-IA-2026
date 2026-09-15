@@ -1,5 +1,5 @@
 from typing import TypedDict, Optional, Annotated
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from datetime import date
 import operator
 
@@ -94,9 +94,9 @@ class MetricStats(BaseModel):
 
 
 class BloodPressureStats(BaseModel):
-    """Estadísticas de presión arterial (dos series: sistólica y diastólica)."""
-    systolic: MetricStats
-    diastolic: MetricStats
+    """Estadísticas de presión arterial (dos series: sistólica y diastólica). None = sin registros."""
+    systolic: Optional[MetricStats] = None
+    diastolic: Optional[MetricStats] = None
 
 
 # -------------------------------------------------------------------
@@ -113,17 +113,24 @@ class Alert(BaseModel):
 
 
 class MonitorAnalysis(BaseModel):
-    """Output estructurado del Agente Monitor."""
-    glucose_fasting_stats: MetricStats
-    hba1c_stats: MetricStats
-    glucose_postprandial_stats: MetricStats
-    weight_stats: MetricStats
+    """
+    Output estructurado del Agente Monitor.
+
+    Nunca se inventan valores (ADR-0003): una métrica sin registros tiene stats `None`, y las
+    métricas con menos de 2 registros (sin tendencia evaluable) figuran en `insufficient_data`.
+    """
+    glucose_fasting_stats: Optional[MetricStats] = None
+    hba1c_stats: Optional[MetricStats] = None
+    glucose_postprandial_stats: Optional[MetricStats] = None
+    weight_stats: Optional[MetricStats] = None
     blood_pressure_stats: BloodPressureStats
     cgm_metrics: Optional[CGMMetrics] = None  # None si el paciente no tiene CGM
     alerts: list[Alert]
     medication: list[Medication]
     requires_rag: bool                    # hay alertas moderadas o severas
     requires_longitudinal_comparison: bool  # hay métricas que ameritan comparar con sesiones anteriores
+    insufficient_data: dict[str, str] = Field(default_factory=dict)  # métrica → motivo
+    records_count: int = 0                # registros del EHR analizados
 
 
 # -------------------------------------------------------------------
@@ -163,6 +170,7 @@ class AgentState(TypedDict):
     is_followup: bool     # True si es pregunta de seguimiento, False si es consulta nueva
     awaiting_confirmation: bool  # True si se espera confirmación del médico para guardar sesión
     information_sufficient: bool  # señal del Clínico: False → el Orquestador reenvía al Monitor (loop de refinamiento)
+    error: Optional[str]  # error de dominio para el médico (p. ej. paciente sin datos); corta el flujo (ADR-0003)
 
     # -- Conversación médico ↔ sistema --
     conversation: Annotated[list[dict], operator.add]

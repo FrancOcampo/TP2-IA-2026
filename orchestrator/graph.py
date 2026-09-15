@@ -8,6 +8,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from orchestrator.state import AgentState
 from orchestrator.router import is_followup_message, is_confirmation_message
 from agents.llm_factory import has_api_key
+from tools.patient_tools import load_patient_data
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,8 @@ def orchestrator_node(state: AgentState) -> AgentState:
         # Control del loop: se reinicia en cada mensaje nuevo del médico
         "iteration": 0,
         "information_sufficient": True,
+        # Un error de dominio de un mensaje anterior no se arrastra al siguiente
+        "error": None,
     }
 
 
@@ -39,13 +42,42 @@ def orchestrator_node(state: AgentState) -> AgentState:
 # Nodo Monitor — agente real con fallback a stub si no hay API key
 # -------------------------------------------------------------------
 
+def _patient_data_error(patient_id: str) -> str | None:
+    """
+    Verifica que el paciente tenga datos en el EHR antes de analizarlo (ADR-0003).
+    Devuelve el mensaje de error para el médico, o None si hay datos.
+    """
+    try:
+        load_patient_data(patient_id)
+    except FileNotFoundError:
+        return f"No hay datos de EHR para el paciente '{patient_id}'."
+    except ValueError:
+        return f"El paciente '{patient_id}' no tiene registros cargados en el EHR."
+    return None
+
+
 def monitor_node(state: AgentState) -> AgentState:
     """
     Analiza las métricas del paciente con el Agente Monitor real (ReAct + tools
     determinísticas). Si no hay GROQ_API_KEY configurada, cae al stub para que
     los tests y el desarrollo sin LLM sigan funcionando.
+
+    Si el paciente no tiene datos, no se analiza nada: se devuelve `error` y el grafo
+    termina sin invocar al Clínico (nunca se inventan valores, ADR-0003).
     """
     patient_id = state.get("patient_id", "")
+
+    error = _patient_data_error(patient_id)
+    if error:
+        logger.warning("Monitor: %s", error)
+        return {
+            "analysis": None,
+            "error": error,
+            "conversation": [{
+                "role": "assistant",
+                "content": f"[Monitor] {error}",
+            }],
+        }
 
     # Si no hay API key, usar el fallback determinístico sin LLM
     if not has_api_key():
@@ -86,34 +118,9 @@ def _monitor_fallback(state: AgentState) -> AgentState:
 
     try:
         from agents.monitor import _build_analysis
-        from tools.patient_tools import (
-            calculate_stats,
-            get_medication_schedule,
-            SERIES_METRICS,
-        )
-        from tools.threshold_tools import detect_threshold_violations, ADA_THRESHOLDS
-        from orchestrator.state import MetricStats
 
-        # Calcular stats para todas las métricas
-        stats: dict[str, MetricStats] = {}
-        for metric in SERIES_METRICS:
-            try:
-                stats[metric] = calculate_stats(patient_id, metric)
-            except (ValueError, FileNotFoundError):
-                pass
-
-        # Detectar violaciones para métricas con umbral
-        alerts = []
-        for metric in ADA_THRESHOLDS:
-            try:
-                alerts.extend(detect_threshold_violations(patient_id, metric))
-            except (ValueError, FileNotFoundError):
-                pass
-
-        # Medicación
-        meds = get_medication_schedule(patient_id)
-
-        analysis = _build_analysis(patient_id, stats, alerts, meds)
+        # Sin resultados previos de un LLM: _build_analysis ejecuta todas las tools.
+        analysis = _build_analysis(patient_id, {}, [], [])
 
         return {
             "analysis": analysis,
@@ -126,6 +133,7 @@ def _monitor_fallback(state: AgentState) -> AgentState:
         logger.error("Monitor fallback: error: %s", e)
         return {
             "analysis": None,
+            "error": f"Error al analizar al paciente '{patient_id}': {e}",
             "conversation": [{
                 "role": "assistant",
                 "content": f"[Monitor] Error al analizar paciente {patient_id}: {e}",
@@ -159,12 +167,15 @@ def _clinical_fallback(state: AgentState) -> AgentState:
     """
     Fallback determinístico del Clínico: genera un reporte estático según el análisis
     y las alertas. Útil para tests y cuando no hay API key.
+
+    Nunca afirma que el paciente está controlado si faltan datos (ADR-0003).
     """
     patient_id = state.get("patient_id", "")
     analysis = state.get("analysis")
     iteration = state.get("iteration", 0) + 1
 
     # Si es P004 (datos insuficientes) y primera/segunda vuelta, marcamos información insuficiente
+    # TODO(F1-06): reemplazar la comparación por id por un criterio basado en insufficient_data.
     information_sufficient = True
     if patient_id == "P004" and iteration < 3:
         information_sufficient = False
@@ -172,10 +183,17 @@ def _clinical_fallback(state: AgentState) -> AgentState:
     else:
         report = f"[Clinical fallback] Reporte determinístico del paciente {patient_id}. "
         if analysis:
-            if len(analysis.alerts) > 0:
+            if analysis.alerts:
                 report += f"Se detectaron {len(analysis.alerts)} alerta(s). "
+            elif analysis.insufficient_data:
+                report += "Sin alertas en los registros disponibles. "
             else:
                 report += "Paciente metabólicamente controlado, sin alertas. "
+            if analysis.insufficient_data:
+                report += (
+                    "Datos insuficientes para evaluar la evolución de: "
+                    f"{', '.join(sorted(analysis.insufficient_data))}. "
+                )
             report += f"Medicación activa: {', '.join(m.name for m in analysis.medication)}."
         else:
             report += "No hay análisis de monitor disponible."
@@ -210,6 +228,14 @@ def route_from_orchestrator(state: AgentState) -> str:
     if state.get("is_followup"):
         return "followup"
     return "pipeline"
+
+
+def route_after_monitor(state: AgentState) -> str:
+    """
+    Tras el Monitor: si no hubo datos del paciente (`error`), el flujo termina sin
+    invocar al Clínico; si hay análisis, sigue a la interpretación (ADR-0003).
+    """
+    return "end" if state.get("error") else "clinical"
 
 
 def decide_next(state: AgentState) -> str:
@@ -260,8 +286,15 @@ def build_graph():
         }
     )
 
-    # El Monitor siempre entrega sus hallazgos al Clínico
-    graph.add_edge("monitor", "clinical")
+    # El Monitor entrega sus hallazgos al Clínico, salvo que no haya datos del paciente
+    graph.add_conditional_edges(
+        "monitor",
+        route_after_monitor,
+        {
+            "clinical": "clinical",
+            "end": END,
+        }
+    )
 
     # El Clínico evalúa si refinar (volver al Monitor) o terminar (guardrail acá)
     graph.add_conditional_edges(

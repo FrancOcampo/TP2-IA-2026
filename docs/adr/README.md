@@ -10,6 +10,7 @@ Complementa al [plan de correcciones](../plan_correcciones.md), que dice **qué*
 |---|---|---|---|---|
 | [0001](0001-registrar-decisiones-con-adr.md) | Registrar las decisiones de arquitectura con ADRs | Aceptado | 2026-09-15 | — |
 | [0002](0002-graphify-para-navegacion-del-codigo.md) | graphify como grafo de conocimiento del proyecto, portable y acotado | Aceptado | 2026-09-15 | — |
+| [0003](0003-no-inventar-valores-clinicos.md) | No inventar valores clínicos: datos faltantes explícitos y corte del flujo | Aceptado | 2026-09-15 | F1-01 / D2 · EAS-6 |
 
 ## Plantilla
 
