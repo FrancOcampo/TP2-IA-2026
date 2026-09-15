@@ -208,6 +208,9 @@ Coordinación crítica:
 
 ## Próximos pasos
 
+> **Fuente de verdad de las correcciones pendientes: [docs/plan_correcciones.md](plan_correcciones.md)**
+> (revisión del 2026-09-15, fases F0–F4). Si esta lista lo contradice, manda el plan.
+
 1. ~~Reemplazar el stub del Monitor por agente real~~ **✅ HECHO**
 2. ~~Implementar `agents/clinical.py` (Agente Clínico real) e integrar en `graph.py`~~ **✅ HECHO**
 3. ~~Conectar MongoDB real y RAG real (B)~~ **✅ HECHO** (merge `dev/B`; stubs eliminados).

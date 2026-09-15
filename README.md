@@ -56,7 +56,7 @@ Abrí **http://127.0.0.1:7860** en el navegador.
 uv run pytest -m "not integration and not llm"
 ```
 
-**Esperado:** `45 passed, 9 deselected`. Los 9 deselected son los 8 tests de integración
+**Esperado:** `45 passed, 9 deselected, 9 xfailed`. Los 9 xfailed son los tests de regresión de `tests/test_regresiones.py` (bugs pendientes de `docs/plan_correcciones.md`). Los 9 deselected son los 8 tests de integración
 (requieren la infraestructura del modo completo, ver abajo) + 1 test estocástico que invoca
 el LLM real. Estrategia de testing completa en [docs/tests.md](docs/tests.md).
 
