@@ -5,14 +5,18 @@ import logging
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from orchestrator.state import AgentState
+from datetime import date
+
+from orchestrator.state import AgentState, MonitorAnalysis
 from orchestrator.router import (
     is_followup_message,
     is_confirmation_message,
+    is_cancellation_message,
     is_reset_message,
     extract_patient_id,
 )
 from agents.llm_factory import has_api_key
+from tools.history_tools import update_patient_history
 from tools.patient_tools import load_patient_data
 
 logger = logging.getLogger(__name__)
@@ -27,7 +31,7 @@ def _reset_patient_scope() -> dict:
     Campos derivados de un análisis que no deben sobrevivir a un cambio de paciente o a
     un reinicio (D4). Única fuente de esta limpieza; F3-01 la reutiliza.
 
-    TODO(F1-04/F3-02): sumar `save_result` y `refinement_request` cuando existan en AgentState.
+    TODO(F3-02): sumar `refinement_request` cuando exista en AgentState.
     """
     return {
         "metrics_history": None,
@@ -38,6 +42,8 @@ def _reset_patient_scope() -> dict:
         "rag_context": None,
         "report": None,
         "followup_answer": None,
+        "analysis_query": None,
+        "save_result": None,
         "error": None,
     }
 
@@ -51,29 +57,43 @@ def orchestrator_node(state: AgentState) -> AgentState:
     Recuerda el paciente activo (`active_patient_id`): si el objetivo cambia, o el médico
     pide reiniciar, limpia los campos derivados y fuerza el pipeline completo (D4).
 
+    Guardado (D5): `save_requested=True` en el input (botón de la UI) o un texto inequívoco
+    ("confirmar", "guardar sesión") llevan al nodo `save`; "cancelar" termina con un aviso.
+    El guardado opera sobre el paciente activo: nunca cambia de paciente.
+
     TODO: reemplazar la heurística de router.py por clasificación vía LLM.
     """
     query = state.get("query") or ""
     active = state.get("active_patient_id")
-    # El id nombrado en el mensaje manda: en el chat no viene `patient_id` y el que
-    # figura en el estado es el del análisis anterior.
-    target = extract_patient_id(query) or state.get("patient_id") or active
 
-    confirming = is_confirmation_message(query)
-    switching = bool(target) and target != active and not confirming
-    resetting = is_reset_message(query) and not confirming
+    # La señal del botón viaja en el input de esta invocación; el nodo `save` la apaga
+    # al terminar, así que un True persistido no dispara un guardado en el mensaje siguiente.
+    saving = bool(state.get("save_requested")) or is_confirmation_message(query)
+    cancelling = not saving and is_cancellation_message(query)
 
     updates: dict = {
-        "active_patient_id": target,
-        "patient_id": target or "",
+        "save_requested": saving,
         # Control del loop: se reinicia en cada mensaje nuevo del médico
         "iteration": 0,
         "information_sufficient": True,
         # Un error de dominio o una respuesta de un mensaje anterior no se arrastran
         "error": None,
         "followup_answer": None,
-        "awaiting_confirmation": confirming,
     }
+    if saving or cancelling:
+        updates["is_followup"] = False
+        if cancelling:
+            updates["conversation"] = [{"role": "assistant", "content": "Guardado cancelado."}]
+        return updates
+
+    # El id nombrado en el mensaje manda: en el chat no viene `patient_id` y el que
+    # figura en el estado es el del análisis anterior.
+    target = extract_patient_id(query) or state.get("patient_id") or active
+    switching = bool(target) and target != active
+    resetting = is_reset_message(query)
+    updates["active_patient_id"] = target
+    updates["patient_id"] = target or ""
+
     if switching or resetting:
         logger.info("Orquestador: %s (activo=%s → objetivo=%s), limpiando estado derivado",
                     "cambio de paciente" if switching else "reinicio", active, target)
@@ -82,7 +102,66 @@ def orchestrator_node(state: AgentState) -> AgentState:
     else:
         # Routing inferido (heurística por ahora; ver router.py)
         updates["is_followup"] = is_followup_message(state, query)
+    if not updates["is_followup"]:
+        # Consulta que origina el análisis vigente: es la que se persiste al guardar.
+        updates["analysis_query"] = query
     return updates
+
+
+# -------------------------------------------------------------------
+# Nodo de guardado — persiste la sesión en el historial (F1-04)
+# -------------------------------------------------------------------
+
+def _metrics_summary(analysis: MonitorAnalysis) -> dict[str, float]:
+    """Último valor de cada métrica con datos; permite comparar con la próxima sesión."""
+    series = {
+        "glucose_fasting": analysis.glucose_fasting_stats,
+        "hba1c": analysis.hba1c_stats,
+        "glucose_postprandial": analysis.glucose_postprandial_stats,
+        "weight": analysis.weight_stats,
+        "blood_pressure_systolic": analysis.blood_pressure_stats.systolic,
+        "blood_pressure_diastolic": analysis.blood_pressure_stats.diastolic,
+    }
+    return {name: stats.last_value for name, stats in series.items() if stats is not None}
+
+
+def build_session_data(state: AgentState) -> dict:
+    """Contenido de la sesión a persistir (definición conceptual §2.6, Tool 9)."""
+    analysis = state["analysis"]
+    return {
+        "date": date.today().isoformat(),
+        "query": state.get("analysis_query") or "",
+        "doctor_context": state.get("doctor_context") or "",
+        "report": state["report"],
+        "alerts": [a.model_dump(mode="json") for a in analysis.alerts],
+        "metrics_summary": _metrics_summary(analysis),
+        "longitudinal_comparison": state.get("longitudinal_comparison"),
+        "suggested_questions": [],  # TODO(F3-04): preguntas sugeridas del reporte estructurado
+    }
+
+
+def save_node(state: AgentState) -> AgentState:
+    """
+    Persiste la sesión del paciente activo con `update_patient_history` y deja el resultado
+    real en `save_result` (id o error). Sin reporte o sin análisis no guarda nada.
+    """
+    patient_id = state.get("active_patient_id") or state.get("patient_id") or ""
+    if not state.get("report") or state.get("analysis") is None:
+        result = {"ok": False, "error": "No hay reporte para guardar."}
+    else:
+        result = update_patient_history(patient_id=patient_id, session_data=build_session_data(state))
+
+    if result.get("ok"):
+        message = f"💾 Sesión guardada en el historial de {patient_id} (id {result['session_id']})."
+        logger.info("Guardado: sesión %s de %s", result["session_id"], patient_id)
+    else:
+        message = f"⚠️ No se guardó la sesión: {result.get('error', 'error desconocido')}"
+        logger.warning("Guardado fallido para %s: %s", patient_id, result.get("error"))
+    return {
+        "save_requested": False,
+        "save_result": result,
+        "conversation": [{"role": "assistant", "content": message}],
+    }
 
 
 # -------------------------------------------------------------------
@@ -276,15 +355,15 @@ def _clinical_fallback(state: AgentState) -> AgentState:
 def route_from_orchestrator(state: AgentState) -> str:
     """
     Decide el camino desde el Orquestador:
-    - confirmación de guardado  → terminar (la persistencia se conecta luego)
+    - guardado pedido           → nodo `save` (persiste y termina)
+    - guardado cancelado        → terminar
     - pregunta de seguimiento   → directo al Clínico
     - consulta nueva            → pipeline completo (Monitor → Clínico)
     """
-    # TODO (Orquestador/A): la rama "save" hoy va directo a END (no persiste). Reemplazar por
-    # un nodo `save` que llame a tools/history_tools.update_patient_history (ya implementada) con
-    # el reporte, alertas y métricas de la sesión. Ver docs/estado_proyecto.md (pendiente).
-    if state.get("awaiting_confirmation"):
+    if state.get("save_requested"):
         return "save"
+    if is_cancellation_message(state.get("query") or ""):
+        return "cancel"
     if state.get("is_followup"):
         return "followup"
     return "pipeline"
@@ -331,6 +410,7 @@ def build_graph():
     graph.add_node("orchestrator", orchestrator_node)
     graph.add_node("monitor", monitor_node)
     graph.add_node("clinical", clinical_node)
+    graph.add_node("save", save_node)
 
     # Entry point
     graph.set_entry_point("orchestrator")
@@ -342,9 +422,11 @@ def build_graph():
         {
             "pipeline": "monitor",
             "followup": "clinical",
-            "save": END,
+            "save": "save",
+            "cancel": END,
         }
     )
+    graph.add_edge("save", END)
 
     # El Monitor entrega sus hallazgos al Clínico, salvo que no haya datos del paciente
     graph.add_conditional_edges(

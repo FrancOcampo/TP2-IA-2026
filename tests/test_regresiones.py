@@ -168,7 +168,6 @@ def test_seguimiento_no_pisa_reporte(app):
 # F1-04 · Guardado de sesión
 # -------------------------------------------------------------------
 
-@_xfail("F1-04")
 def test_si_no_dispara_guardado(app):
     _analizar(app, "P002", "t-si")
     out = app.invoke({"query": "si"}, _cfg("t-si"))
@@ -177,7 +176,6 @@ def test_si_no_dispara_guardado(app):
     assert not out.get("save_requested"), "'si' en el chat no es una confirmación de guardado"
 
 
-@_xfail("F1-04")
 def test_guardar_persiste(app, monkeypatch):
     llamadas: list[tuple[tuple, dict]] = []
 
