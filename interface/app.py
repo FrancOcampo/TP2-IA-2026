@@ -154,7 +154,7 @@ def save_session(thread_id: str, history: list):
     try:
         langgraph_app.invoke({"query": "confirmar"}, _config(thread_id))
         # NOTA: hoy la rama `save` del grafo termina en END sin persistir. La tool de escritura
-        # (tools/mongo_tools.update_patient_history) YA existe; falta cablear el nodo `save` en
+        # (tools/history_tools.update_patient_history) YA existe; falta cablear el nodo `save` en
         # orchestrator/graph.py (pendiente del Orquestador). Ver docs/estado_proyecto.md.
         msg = ("💾 Confirmación recibida. La persistencia en el historial todavía no está activa: "
                "falta cablear la rama `save` del grafo a `update_patient_history` (pendiente del Orquestador).")

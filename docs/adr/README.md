@@ -12,6 +12,7 @@ Complementa al [plan de correcciones](../plan_correcciones.md), que dice **qué*
 | [0002](0002-graphify-para-navegacion-del-codigo.md) | graphify como grafo de conocimiento del proyecto, portable y acotado | Aceptado | 2026-09-15 | — |
 | [0003](0003-no-inventar-valores-clinicos.md) | No inventar valores clínicos: datos faltantes explícitos y corte del flujo | Aceptado | 2026-09-15 | F1-01 / D2 · EAS-6 |
 | [0004](0004-paciente-activo-y-aislamiento-de-estado.md) | El Orquestador recuerda el paciente activo y aísla el estado al cambiar | Aceptado | 2026-09-24 | F1-02 / D4 · EAS-7 |
+| [0005](0005-historial-en-sqlite-local.md) | Historial de pacientes en SQLite local, detrás de una interfaz de almacén | Aceptado | 2026-09-24 | MVP-01 · F2-08 |
 
 ## Plantilla
 

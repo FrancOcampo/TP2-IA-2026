@@ -187,7 +187,7 @@ def test_guardar_persiste(app, monkeypatch):
         return {"ok": True, "session_id": "test-session"}
 
     # Se parchea en el módulo de la tool y, si el grafo la importa directamente, también ahí.
-    monkeypatch.setattr("tools.mongo_tools.update_patient_history", fake_update)
+    monkeypatch.setattr("tools.history_tools.update_patient_history", fake_update)
     monkeypatch.setattr("orchestrator.graph.update_patient_history", fake_update, raising=False)
 
     _analizar(app, "P002", "t-save")
