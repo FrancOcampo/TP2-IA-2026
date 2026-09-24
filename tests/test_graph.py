@@ -90,16 +90,47 @@ def test_route_from_orchestrator():
 
 
 def test_refinamiento_loop_insuficiente(app):
-    """Paciente P004 (datos insuficientes) -> dispara loop de refinamiento y frena por guardrail."""
+    """P004 (1 registro) ya se analiza con la serie global: no hay nada que refinar (F1-06).
+    Se informa en una sola vuelta con la limitación explícita en el reporte."""
     init = {"patient_id": "P004", "query": "Analizá al paciente P004", "conversation": []}
     out = app.invoke(init, _cfg("t-refine"))
 
-    # El orquestador debe realizar 3 iteraciones (vuelta al monitor y clínico) por datos insuficientes
-    assert out["iteration"] == 3
-    assert out["information_sufficient"] is True  # En la última iteración, frena por guardrail (suficiente=True para terminar)
-    assert out["report"] is not None
-    # Cada vuelta agrega mensajes a la conversación (1 monitor + 1 clínico por vuelta = 6 mensajes)
-    assert len(out["conversation"]) == 6
+    assert out["iteration"] == 1
+    assert out["information_sufficient"] is True
+    assert "insuficientes" in out["report"]
+    assert len(out["conversation"]) == 2  # 1 Monitor + 1 Clínico
+
+
+def test_refinamiento_amplia_ventana_acotada(app, monkeypatch):
+    """P002 analizado con 1 mes (el LLM del Monitor eligió esa ventana) → datos insuficientes →
+    el loop vuelve al Monitor, que amplía a la serie global → iteration == 2 (F1-06)."""
+    from langchain_core.messages import AIMessage
+    import agents.clinical
+    import agents.monitor
+    import orchestrator.graph as graph
+
+    llamada = {"name": "tool_calculate_stats", "id": "c1", "type": "tool_call",
+               "args": {"patient_id": "P002", "metric": "hba1c", "last_n_months": 1}}
+    guion = [AIMessage(content="", tool_calls=[llamada]), AIMessage(content="listo")]
+
+    class _MonitorGuionado:
+        def invoke(self, messages):
+            return guion.pop(0)
+
+    def _clinico_sin_llm(state):
+        raise RuntimeError("sin LLM en el test: usar el fallback del Clínico")
+
+    monkeypatch.setattr(graph, "has_api_key", lambda: True)
+    monkeypatch.setattr(agents.monitor, "_build_monitor_llm", lambda: _MonitorGuionado())
+    monkeypatch.setattr(agents.clinical, "run_clinical_agent", _clinico_sin_llm)
+
+    init = {"patient_id": "P002", "query": "¿Cómo evolucionó en el último mes?", "conversation": []}
+    out = app.invoke(init, _cfg("t-refine-window"))
+
+    assert out["iteration"] == 2
+    assert out["analysis"].analysis_window.is_global, "el refinamiento amplía a la serie global"
+    assert out["analysis"].insufficient_data == {}
+    assert any("Refinamiento" in m["content"] for m in out["conversation"])
 
 
 # ---- Modo estocástico: el LLM real (plomería, no contenido) ----

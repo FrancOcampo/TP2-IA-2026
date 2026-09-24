@@ -18,6 +18,7 @@ from orchestrator.router import (
 from agents.llm_factory import has_api_key
 from tools.history_tools import update_patient_history
 from tools.patient_tools import load_patient_data
+from agents.monitor import window_key
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +206,11 @@ def monitor_node(state: AgentState) -> AgentState:
             }],
         }
 
+    # Refinamiento (vuelta desde el Clínico): la única acción posible hoy es ampliar a la
+    # ventana global, y es determinística (F1-06). TODO(F3-02): ejecutar el RefinementRequest.
+    if state.get("iteration", 0) >= 1:
+        return _monitor_refinement(state)
+
     # Si no hay API key, usar el fallback determinístico sin LLM
     if not has_api_key():
         logger.warning("Monitor: sin API key, ejecutando fallback determinístico")
@@ -233,6 +239,24 @@ def monitor_node(state: AgentState) -> AgentState:
     except Exception as e:
         logger.error("Monitor: error en agente real, fallback determinístico: %s", e)
         return _monitor_fallback(state)
+
+
+def _monitor_refinement(state: AgentState) -> AgentState:
+    """Re-análisis del refinamiento: mismas tools, ventana global (la más amplia disponible)."""
+    from agents.monitor import _build_analysis
+
+    patient_id = state.get("patient_id", "")
+    previous = state.get("analysis")
+    analysis = _build_analysis(patient_id)
+    before = window_key(previous.analysis_window) if previous else "?"
+    logger.info("Monitor: refinamiento de %s, ventana %s → global", patient_id, before)
+    return {
+        "analysis": analysis,
+        "conversation": [{
+            "role": "assistant",
+            "content": f"[Monitor] Refinamiento: análisis ampliado de la ventana {before} a toda la serie.",
+        }],
+    }
 
 
 def _monitor_fallback(state: AgentState) -> AgentState:
@@ -267,6 +291,18 @@ def _monitor_fallback(state: AgentState) -> AgentState:
         }
 
 
+def information_sufficient_for(analysis: MonitorAnalysis | None) -> bool:
+    """
+    Criterio determinístico de suficiencia (F1-06, D6). La información es insuficiente SOLO si
+    hay métricas sin datos suficientes Y existe una acción de refinamiento posible: hoy, ampliar
+    una ventana acotada a la serie global. Si la ventana ya es global no hay nada más que pedir:
+    se informa con la limitación explícita en el reporte.
+    """
+    if analysis is None or not analysis.insufficient_data:
+        return True
+    return analysis.analysis_window.is_global
+
+
 def clinical_node(state: AgentState) -> AgentState:
     """
     Interpreta los hallazgos del Monitor y genera el reporte clínico
@@ -283,6 +319,8 @@ def clinical_node(state: AgentState) -> AgentState:
         updates = run_clinical_agent(state)
         # Incrementar la iteración en el nodo
         updates["iteration"] = state.get("iteration", 0) + 1
+        if not state.get("is_followup"):
+            updates["information_sufficient"] = information_sufficient_for(state.get("analysis"))
         return updates
     except Exception as e:
         logger.error("Clínico: error en agente real, fallback determinístico: %s", e)
@@ -313,12 +351,12 @@ def _clinical_fallback(state: AgentState) -> AgentState:
             "conversation": [{"role": "assistant", "content": answer}],
         }
 
-    # Si es P004 (datos insuficientes) y primera/segunda vuelta, marcamos información insuficiente
-    # TODO(F1-06): reemplazar la comparación por id por un criterio basado en insufficient_data.
-    information_sufficient = True
-    if patient_id == "P004" and iteration < 3:
-        information_sufficient = False
-        report = f"[Clinical fallback] Información cuantitativa insuficiente para {patient_id}. Solicitando ampliación al Monitor."
+    information_sufficient = information_sufficient_for(analysis)
+    if not information_sufficient:
+        report = (
+            f"[Clinical fallback] Información cuantitativa insuficiente para {patient_id} en la "
+            f"ventana {window_key(analysis.analysis_window)}. Solicitando ampliación al Monitor."
+        )
     else:
         report = f"[Clinical fallback] Reporte determinístico del paciente {patient_id}. "
         if analysis:
@@ -331,7 +369,8 @@ def _clinical_fallback(state: AgentState) -> AgentState:
             if analysis.insufficient_data:
                 report += (
                     "Datos insuficientes para evaluar la evolución de: "
-                    f"{', '.join(sorted(analysis.insufficient_data))}. "
+                    f"{', '.join(sorted(analysis.insufficient_data))} "
+                    f"({analysis.records_count} registro(s) en toda la serie disponible). "
                 )
             report += f"Medicación activa: {', '.join(m.name for m in analysis.medication)}."
         else:

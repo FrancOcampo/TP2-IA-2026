@@ -188,17 +188,10 @@ def run_clinical_agent(state: AgentState) -> dict[str, Any]:
             "conversation": [{"role": "assistant", "content": final_content}],
         }
 
-    # Determinar si la información es suficiente analizando la respuesta del LLM
-    # TODO(F1-06/F3-02): reemplazar la detección por palabra clave por ClinicalAssessment.
-    information_sufficient = True
-    if "information_sufficient = false" in final_content.lower() or "insuficiente" in final_content.lower():
-        information_sufficient = False
-        logger.warning("Clínico: Detectó información insuficiente de parte del Monitor.")
-
-    # Estructurar la actualización de estado
+    # La suficiencia de información NO se infiere del texto (D6): la decide clinical_node con
+    # un criterio determinístico sobre el análisis (F1-06). TODO(F3-02): ClinicalAssessment.
     updates: dict[str, Any] = {
         "report": final_content,
-        "information_sufficient": information_sufficient,
         "conversation": [{
             "role": "assistant",
             "content": final_content,

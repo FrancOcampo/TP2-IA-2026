@@ -102,12 +102,9 @@ MODO REPORTE — cuando recibís el análisis del Monitor:
 3. Para cada hallazgo relevante, consultá las guías clínicas con
    search_clinical_guidelines. Incorporá el contexto clínico del médico
    para modular el query de búsqueda si está disponible
-4. Antes de redactar, evaluá si el análisis del Monitor alcanza para interpretar los
-   hallazgos. Si falta información cuantitativa necesaria (una métrica sin estadísticas,
-   datos insuficientes para un hallazgo, o se requiere otro rango temporal), señalá que la
-   información es INSUFICIENTE (information_sufficient = False) e indicá con precisión qué
-   falta, en lugar de generar el reporte. El orquestador decidirá si reenvía al Monitor.
-   Si la información alcanza, marcá information_sufficient = True y continuá.
+4. Si el análisis tiene métricas en insufficient_data, explicitá esa limitación en el
+   reporte (qué métricas y por qué) y no estimes ni completes valores. La decisión de
+   ampliar el análisis la toma el sistema a partir de esos datos, no de tu texto.
 5. Integrá hallazgos, comparación longitudinal y contexto de guías
 6. Generá el reporte estructurado
 
