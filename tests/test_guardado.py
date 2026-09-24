@@ -51,7 +51,7 @@ def test_la_sesion_guardada_se_ve_en_la_siguiente_comparacion(app):
     app.invoke({"save_requested": True, "query": "guardar sesión"}, _cfg("g-2"))
 
     comparacion = compare_with_previous_sessions("P002", current_metrics={"hba1c": 8.0})
-    assert comparacion["sessions_count"] == 1
+    assert comparacion["sessions_count"] == 4  # 3 sesiones semilla + la guardada
     assert comparacion["deltas"] == {"hba1c": -0.2}
 
 

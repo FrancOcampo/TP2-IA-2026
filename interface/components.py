@@ -156,16 +156,33 @@ def patient_profile(
     patient_id: str,
     metrics: Optional[PatientMetrics],
     medication: Optional[list[Medication]],
+    history: Optional[dict] = None,
 ) -> str:
     """
     Resumen del paciente para mostrar ANTES de lanzar el análisis (paso 2 del flujo).
-    Combina lo disponible del EHR (rango de fechas, último peso/PA) con la medicación activa.
+    Combina el perfil del historial (demografía, diagnósticos, comorbilidades, sesiones previas),
+    lo disponible del EHR (rango de fechas, último peso/PA) y la medicación activa.
     Degrada con elegancia si faltan datos.
     """
     if not patient_id:
         return "_Seleccioná un paciente para ver su perfil._"
 
     lineas = [f"### Paciente {patient_id}"]
+
+    if history and history.get("found"):
+        demo = history.get("demographics") or {}
+        if demo:
+            lineas.append(f"- **Edad / sexo**: {demo.get('age', '?')} años · {demo.get('sex', '?')}")
+        diagnoses = history.get("diagnoses") or []
+        if diagnoses:
+            lineas.append("- **Diagnósticos**: " + ", ".join(
+                f"{d.get('label')} ({d.get('code')}, desde {d.get('since')})" for d in diagnoses
+            ))
+        comorbidities = history.get("comorbidities") or []
+        lineas.append("- **Comorbilidades**: " + (", ".join(comorbidities) if comorbidities else "ninguna registrada"))
+        sessions = history.get("sessions") or []
+        if sessions:
+            lineas.append(f"- **Sesiones previas**: {len(sessions)} (última: {sessions[-1].get('date', '?')})")
 
     if metrics and metrics.dates:
         n = len(metrics.dates)

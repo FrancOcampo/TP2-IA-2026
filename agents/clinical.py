@@ -35,14 +35,24 @@ logger = logging.getLogger(__name__)
 # Tools LangChain — wrappers de las funciones clínicas stubs.
 # -------------------------------------------------------------------
 
+def _safe_json(fn, *args) -> str:
+    """Ejecuta una tool y serializa el resultado; un error vuelve como {"error": ...} al LLM."""
+    try:
+        return json.dumps(fn(*args), ensure_ascii=False, default=str)
+    except Exception as e:
+        logger.warning("Clínico: tool %s falló: %s", fn.__name__, e)
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
 @tool
 def tool_get_patient_history(patient_id: str) -> str:
-    """Devuelve el historial clínico de sesiones previas del paciente desde MongoDB.
+    """Devuelve el perfil del paciente (demografía, diagnósticos, comorbilidades, medicación
+    de base) y el historial de sesiones previas guardadas. `found: false` si no existe.
 
     Args:
         patient_id: ID del paciente (ej. "P001")
     """
-    return str(get_patient_history(patient_id))
+    return _safe_json(get_patient_history, patient_id)
 
 
 @tool
@@ -52,7 +62,7 @@ def tool_compare_with_previous_sessions(patient_id: str) -> str:
     Args:
         patient_id: ID del paciente (ej. "P001")
     """
-    return str(compare_with_previous_sessions(patient_id))
+    return _safe_json(compare_with_previous_sessions, patient_id)
 
 
 @tool

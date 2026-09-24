@@ -19,6 +19,7 @@ Complementa al [plan de correcciones](../plan_correcciones.md), que dice **qué*
 | [0009](0009-ventana-principal-del-monitor.md) | El Monitor analiza con una ventana principal y registra llamadas, no resultados | Aceptado | 2026-09-24 | F1-05 / D7 · EAS-10 |
 | [0010](0010-suficiencia-de-informacion-deterministica.md) | Suficiencia de información con un criterio determinístico sobre el análisis | Aceptado | 2026-09-24 | F1-06 / D6 · EAS-11 |
 | [0011](0011-metas-de-control-dm2.md) | Alertas contra metas de control de DM2, no criterios diagnósticos | Aceptado (🩺 validación pendiente) | 2026-09-24 | F2-01 / D1 · EAS-12 |
+| [0012](0012-perfil-del-paciente-y-sesiones-semilla.md) | Perfil clínico del paciente, sesiones semilla y tools de historial que no lanzan | Aceptado | 2026-09-24 | F2-07 · EAS-18 |
 
 ## Plantilla
 

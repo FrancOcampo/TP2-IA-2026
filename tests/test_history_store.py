@@ -65,3 +65,18 @@ def test_persistencia_entre_conexiones(tmp_path):
 def test_carga_de_pacientes_de_muestra(seeded_store):
     ids = seeded_store.list_patient_ids()
     assert {"P001", "P002", "P003", "P004"} <= set(ids)
+
+
+def test_add_session_es_idempotente_por_id():
+    store = get_store()
+    store.upsert_patient({"patient_id": "P002"})
+    store.add_session("P002", _session("s1", "2026-09-10T10:00:00+00:00"))
+    store.add_session("P002", _session("s1", "2026-09-10T10:00:00+00:00"))
+    assert len(store.get_patient("P002")["sessions"]) == 1
+
+
+def test_recargar_no_duplica_sesiones_semilla(seeded_store):
+    from data.load_history import load_all
+
+    load_all(seeded_store, verbose=False)
+    assert len(seeded_store.get_patient("P002")["sessions"]) == 3
