@@ -104,3 +104,25 @@ def test_retriever_sin_indice_devuelve_vacio_y_avisa(tmp_path, monkeypatch, capl
 def test_index_ready_sin_indice(tmp_path, monkeypatch):
     monkeypatch.setattr(ingest, "CHROMA_DIR", tmp_path / "no_existe")
     assert ingest.index_ready() is False
+
+
+def test_guias_excluidas_no_se_cargan(tmp_path):
+    (tmp_path / "ADA_2024.md").write_text("# Introducción\n\nMetodología.", encoding="utf-8")
+    (tmp_path / "guia.md").write_text("# Metas\n\nHbA1c < 7 %.", encoding="utf-8")
+    assert [d["source"] for d in ingest.load_markdown_files(tmp_path, verbose=False)] == ["guia.md"]
+
+
+def test_huella_cambia_con_el_contenido_de_las_guias():
+    a = ingest.corpus_fingerprint([{"source": "g.md", "text": "HbA1c < 7 %"}])
+    b = ingest.corpus_fingerprint([{"source": "g.md", "text": "HbA1c < 8 %"}])
+    assert a != b
+    assert a == ingest.corpus_fingerprint([{"source": "g.md", "text": "HbA1c < 7 %"}])
+
+
+def test_ingesta_quita_guias_que_ya_no_se_indexan(collection):
+    build_collection([{"source": "vieja.md", "text": _guide(3)}], collection)
+    docs = [{"source": "guia.md", "text": _guide(3)}]
+    ingest._remove_other_sources(collection, docs)
+    build_collection(docs, collection)
+    fuentes = {m["source"] for m in collection.get(include=["metadatas"])["metadatas"]}
+    assert fuentes == {"guia.md"}
