@@ -17,6 +17,7 @@ Complementa al [plan de correcciones](../plan_correcciones.md), que dice **qué*
 | [0007](0007-reporte-y-respuesta-de-seguimiento-separados.md) | El reporte de la sesión y la respuesta de seguimiento viven en campos separados | Aceptado | 2026-09-24 | F1-03 / D3 · EAS-8 |
 | [0008](0008-guardado-explicito-de-sesion.md) | Guardado de sesión con señal explícita y nodo `save` que persiste | Aceptado | 2026-09-24 | F1-04 / D5 · EAS-9 |
 | [0009](0009-ventana-principal-del-monitor.md) | El Monitor analiza con una ventana principal y registra llamadas, no resultados | Aceptado | 2026-09-24 | F1-05 / D7 · EAS-10 |
+| [0010](0010-suficiencia-de-informacion-deterministica.md) | Suficiencia de información con un criterio determinístico sobre el análisis | Aceptado | 2026-09-24 | F1-06 / D6 · EAS-11 |
 
 ## Plantilla
 

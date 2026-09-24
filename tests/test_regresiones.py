@@ -1,9 +1,10 @@
 # tests/test_regresiones.py
 #
-# Tests de reproducción de los bugs de Fase 1 (plan: docs/plan_correcciones.md → F0-01).
+# Tests de regresión de los bugs de Fase 1 (plan: docs/plan_correcciones.md → F0-01).
 #
-# Cada test describe el comportamiento CORRECTO y hoy falla. Están marcados
-# `xfail(strict=True, raises=AssertionError)`:
+# Cada test describe el comportamiento CORRECTO. Nacieron como
+# `xfail(strict=True, raises=AssertionError)` y se les quitó la marca al corregir cada ítem
+# (F1-01…F1-06, todos cerrados). Para reproducir un bug nuevo, marcarlo con `_xfail("F?-??")`:
 #   - strict=True     → cuando el bug se corrige y el test pasa, la suite falla (XPASS) y
 #                       obliga a quitar el xfail en el mismo cambio.
 #   - raises=Assertion → solo cuenta como "fallo esperado" si falla por la aserción; una
@@ -254,7 +255,6 @@ def test_monitor_respeta_ventana_elegida(monkeypatch):
 # F1-06 · Suficiencia de información hardcodeada por id
 # -------------------------------------------------------------------
 
-@_xfail("F1-06")
 def test_suficiencia_no_depende_del_id(app, monkeypatch, tmp_path):
     import tools.patient_tools as patient_tools
 

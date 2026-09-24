@@ -122,8 +122,10 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
    **sin RAG**). Motor detrás de `HistoryStore`: SQLite local por defecto, MongoDB opcional (ADR-0005). RAG es exclusivo de las guías clínicas.
 3. **CGM = extensión futura/opcional**. `CGMMetrics`/`cgm_series` están definidos pero
    fuera del alcance de la implementación actual; marcado así en la def. conceptual.
-4. **Loop de refinamiento**: el Clínico expone `information_sufficient`; si es `False` e
-   `iteration < 3`, el grafo vuelve al Monitor (`decide_next`). Guardrail = 3 iteraciones.
+4. **Loop de refinamiento**: `information_sufficient` lo fija el nodo Clínico con un criterio
+   determinístico sobre el análisis (ADR-0010: hay `insufficient_data` y la ventana es acotada);
+   si es `False` e `iteration < 3`, el grafo vuelve al Monitor (`decide_next`), que re-analiza con
+   la ventana global. Guardrail = 3 iteraciones.
    El contador se reinicia en el Orquestador en cada mensaje nuevo (por eso el loop NO
    vuelve por el nodo orquestador, para no resetear `iteration`).
 5. **Modelos tipados** en vez de `dict`/`list[str]`: `Medication`, `MetricStats`,
@@ -220,5 +222,5 @@ Coordinación crítica:
 5. ~~Agregar el nodo de persistencia~~ **✅ HECHO** (F1-04, ADR-0008): nodo `save` → `update_patient_history`.
 6. Reemplazar la heurística de `router.py` por clasificación vía LLM.
 7. ~~Completar el harness de evaluación de D~~ **✅ HECHO**: evaluación cualitativa con `tests/eval_runner.py` + `tests/cases/*.json` (ver [docs/tests.md](docs/tests.md)).
-8. **Detección de "datos insuficientes" en el Agente Clínico real** (A/C): hoy solo el fallback la detecta (P004). No es ya un problema de tests —el gate de `test_graph.py` corre en modo determinístico— sino una brecha de comportamiento del agente; conviene cerrarla para que el loop de refinamiento se dispare también con LLM real.
+8. ~~Detección de "datos insuficientes" en el Agente Clínico real~~ **✅ HECHO** (F1-06, ADR-0010): criterio determinístico común (`information_sufficient_for`); la versión estructurada con LLM es F3-02.
 ```

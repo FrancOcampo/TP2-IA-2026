@@ -29,7 +29,7 @@
 **Comando de verificación base**
 
 ```bash
-uv run pytest -m "not integration and not llm"      # gate determinístico (hoy: 49 passed, 8 xfailed)
+uv run pytest -m "not integration and not llm"      # gate determinístico (al cerrar F1: 108 passed, 0 xfailed)
 uv run pytest -m integration                         # requiere MongoDB + Ollama + ChromaDB indexado
 uv run python tests/eval_runner.py                   # evaluación cualitativa con LLM real
 ```
@@ -48,7 +48,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F1-03** | [EAS-8](https://linear.app/easymetricdev/issue/EAS-8) | La respuesta de seguimiento sobrescribe el reporte | 🟠 Alta | F0-01 | ✅ |
 | **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ✅ |
 | **F1-05** | [EAS-10](https://linear.app/easymetricdev/issue/EAS-10) | Monitor mezcla ventanas temporales y duplica alertas | 🟠 Alta | F0-01 | ✅ |
-| **F1-06** | [EAS-11](https://linear.app/easymetricdev/issue/EAS-11) | Suficiencia de información hardcodeada (P004) y por palabra clave | 🟠 Alta | F1-01 | ⬜ |
+| **F1-06** | [EAS-11](https://linear.app/easymetricdev/issue/EAS-11) | Suficiencia de información hardcodeada (P004) y por palabra clave | 🟠 Alta | F1-01 | ✅ |
 | **F2-01** | [EAS-12](https://linear.app/easymetricdev/issue/EAS-12) | Umbrales diagnósticos usados como umbrales de control 🩺 | 🔴 Crítica | — | ⬜ |
 | **F2-02** | [EAS-13](https://linear.app/easymetricdev/issue/EAS-13) | Umbrales de presión arterial y variación de peso 🩺 | 🟡 Media | F2-01 | ⬜ |
 | **F2-03** | [EAS-14](https://linear.app/easymetricdev/issue/EAS-14) | Alertas trazables (umbral explícito) y agrupadas por episodio | 🟡 Media | F2-01 | ⬜ |
@@ -286,9 +286,11 @@ chequear globalmente y aparecen alertas fuera de la ventana. Llamadas repetidas 
    insuficientes. Nuevo test del loop real: P002 con `last_n_months=1` y consulta de tendencia → refina a global → `iteration == 2`.
 
 **Aceptación**
-- [ ] `test_suficiencia_no_depende_del_id` pasa.
-- [ ] Tests del loop reescritos y en verde.
-- [ ] `grep -n "P004" orchestrator agents` no devuelve lógica (solo comentarios/tests).
+- [x] `test_suficiencia_no_depende_del_id` pasa.
+- [x] Tests del loop reescritos y en verde (`test_refinamiento_loop_insuficiente`: P004 → `iteration == 1`; `test_refinamiento_amplia_ventana_acotada`: P002 con 1 mes → global, `iteration == 2`).
+- [x] `grep -n "P004" orchestrator agents` no devuelve nada.
+
+**Decisión registrada:** [ADR-0010](adr/0010-suficiencia-de-informacion-deterministica.md). El criterio también se aplica al Clínico real (se eliminó la detección por palabra clave) y el refinamiento del Monitor es determinístico (ventana global, sin LLM).
 
 ---
 
