@@ -6,7 +6,12 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from orchestrator.state import AgentState
-from orchestrator.router import is_followup_message, is_confirmation_message
+from orchestrator.router import (
+    is_followup_message,
+    is_confirmation_message,
+    is_reset_message,
+    extract_patient_id,
+)
 from agents.llm_factory import has_api_key
 from tools.patient_tools import load_patient_data
 
@@ -17,25 +22,66 @@ logger = logging.getLogger(__name__)
 # Nodo Orquestador
 # -------------------------------------------------------------------
 
+def _reset_patient_scope() -> dict:
+    """
+    Campos derivados de un análisis que no deben sobrevivir a un cambio de paciente o a
+    un reinicio (D4). Única fuente de esta limpieza; F3-01 la reutiliza.
+
+    TODO(F1-03/F1-04/F3-02): sumar `followup_answer`, `save_result` y `refinement_request`
+    cuando existan en AgentState.
+    """
+    return {
+        "metrics_history": None,
+        "medication": None,
+        "patient_history": None,
+        "analysis": None,
+        "longitudinal_comparison": None,
+        "rag_context": None,
+        "report": None,
+        "error": None,
+    }
+
+
 def orchestrator_node(state: AgentState) -> AgentState:
     """
     Punto de entrada del grafo. Infiere la intención del médico a partir del
     mensaje (state["query"]) y del estado de la sesión, e inicializa el control
     del flujo para esta invocación.
 
+    Recuerda el paciente activo (`active_patient_id`): si el objetivo cambia, o el médico
+    pide reiniciar, limpia los campos derivados y fuerza el pipeline completo (D4).
+
     TODO: reemplazar la heurística de router.py por clasificación vía LLM.
     """
     query = state.get("query") or ""
-    return {
-        # Routing inferido (heurística por ahora; ver router.py)
-        "is_followup": is_followup_message(state, query),
-        "awaiting_confirmation": is_confirmation_message(query),
+    active = state.get("active_patient_id")
+    # El id nombrado en el mensaje manda: en el chat no viene `patient_id` y el que
+    # figura en el estado es el del análisis anterior.
+    target = extract_patient_id(query) or state.get("patient_id") or active
+
+    confirming = is_confirmation_message(query)
+    switching = bool(target) and target != active and not confirming
+    resetting = is_reset_message(query) and not confirming
+
+    updates: dict = {
+        "active_patient_id": target,
+        "patient_id": target or "",
         # Control del loop: se reinicia en cada mensaje nuevo del médico
         "iteration": 0,
         "information_sufficient": True,
         # Un error de dominio de un mensaje anterior no se arrastra al siguiente
         "error": None,
+        "awaiting_confirmation": confirming,
     }
+    if switching or resetting:
+        logger.info("Orquestador: %s (activo=%s → objetivo=%s), limpiando estado derivado",
+                    "cambio de paciente" if switching else "reinicio", active, target)
+        updates.update(_reset_patient_scope())
+        updates["is_followup"] = False
+    else:
+        # Routing inferido (heurística por ahora; ver router.py)
+        updates["is_followup"] = is_followup_message(state, query)
+    return updates
 
 
 # -------------------------------------------------------------------

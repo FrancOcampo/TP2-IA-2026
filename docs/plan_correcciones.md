@@ -44,7 +44,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 |---|---|---|---|---|---|
 | **F0-01** | [EAS-5](https://linear.app/easymetricdev/issue/EAS-5) | Tests de reproducción de bugs | — | — | ✅ |
 | **F1-01** | [EAS-6](https://linear.app/easymetricdev/issue/EAS-6) | Paciente inexistente / métricas sin datos informados como "controlado" | 🔴 Crítica | F0-01 | ✅ |
-| **F1-02** | [EAS-7](https://linear.app/easymetricdev/issue/EAS-7) | Contaminación de estado al cambiar de paciente en el mismo thread | 🔴 Crítica | F0-01 | ⬜ |
+| **F1-02** | [EAS-7](https://linear.app/easymetricdev/issue/EAS-7) | Contaminación de estado al cambiar de paciente en el mismo thread | 🔴 Crítica | F0-01 | ✅ |
 | **F1-03** | [EAS-8](https://linear.app/easymetricdev/issue/EAS-8) | La respuesta de seguimiento sobrescribe el reporte | 🟠 Alta | F0-01 | ⬜ |
 | **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ⬜ |
 | **F1-05** | [EAS-10](https://linear.app/easymetricdev/issue/EAS-10) | Monitor mezcla ventanas temporales y duplica alertas | 🟠 Alta | F0-01 | ⬜ |
@@ -180,9 +180,11 @@ paciente P003" no es seguimiento pero re-ejecuta el pipeline sobre **P002**.
 3. La limpieza vive en una única función `_reset_patient_scope()` en `graph.py` (reutilizada por F3-01).
 
 **Aceptación**
-- [ ] `test_cambio_de_paciente_limpia_estado` pasa.
-- [ ] Nuevo test: en un thread con P002, `query="analizá al paciente P003"` sin `patient_id` → análisis de P003.
-- [ ] Nuevo test: "reiniciar el análisis" → `iteration` vuelve a 1 y el Monitor corre de nuevo.
+- [x] `test_cambio_de_paciente_limpia_estado` pasa sin `xfail`.
+- [x] `test_cambio_de_paciente_desde_el_chat`: en un thread con P002, `query="analizá al paciente P003"` sin `patient_id` → análisis de P003.
+- [x] `test_reiniciar_vuelve_a_correr_el_pipeline`: "reiniciar el análisis" → `iteration == 1` y el Monitor corre de nuevo.
+
+**Decisión registrada:** [ADR-0004](adr/0004-paciente-activo-y-aislamiento-de-estado.md). El id nombrado en el mensaje tiene prioridad sobre `patient_id`; `_reset_patient_scope()` hoy limpia solo los campos existentes (`followup_answer`, `save_result` y `refinement_request` se suman en F1-03, F1-04 y F3-02).
 
 ---
 

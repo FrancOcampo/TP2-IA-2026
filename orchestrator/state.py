@@ -141,6 +141,7 @@ class AgentState(TypedDict):
 
     # -- Identificación del paciente --
     patient_id: str
+    active_patient_id: Optional[str]  # paciente del análisis en curso; lo escribe SOLO el Orquestador (D4)
 
     # -- Mensaje actual del médico --
     query: str            # consulta/pregunta actual (consumida por los templates)

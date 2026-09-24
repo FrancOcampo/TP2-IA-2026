@@ -104,7 +104,6 @@ def test_ui_metricas_sin_datos_se_muestran_como_sin_datos():
 _P003_MIN_AYUNAS = 55.0
 
 
-@_xfail("F1-02")
 def test_cambio_de_paciente_limpia_estado(app):
     _analizar(app, "P002", "t-switch")
     out = app.invoke({"patient_id": "P003", "query": "Analizá al paciente P003"}, _cfg("t-switch"))
@@ -114,7 +113,6 @@ def test_cambio_de_paciente_limpia_estado(app):
         "el análisis debe ser del paciente nuevo (P003), no del anterior (P002)"
 
 
-@_xfail("F1-02")
 def test_cambio_de_paciente_desde_el_chat(app):
     """Mismo caso pero desde el chat: el mensaje nombra al paciente y no viene patient_id."""
     _analizar(app, "P002", "t-switch-chat")
@@ -122,6 +120,35 @@ def test_cambio_de_paciente_desde_el_chat(app):
 
     assert out["analysis"].glucose_fasting_stats.min_value == _P003_MIN_AYUNAS, \
         "el pipeline debe correr sobre P003, el paciente nombrado en el mensaje"
+
+
+def test_cambio_de_paciente_conserva_solo_el_activo(app):
+    """El estado derivado del paciente anterior no sobrevive al cambio."""
+    _analizar(app, "P002", "t-scope")
+    out = app.invoke({"query": "analizá al paciente P003"}, _cfg("t-scope"))
+
+    assert out["patient_id"] == "P003"
+    assert out["active_patient_id"] == "P003"
+    assert "P002" not in (out.get("report") or ""), "el reporte no debe arrastrar al paciente anterior"
+
+
+def test_mismo_paciente_sigue_siendo_seguimiento(app):
+    """Nombrar al paciente activo no es un cambio: sigue siendo seguimiento."""
+    _analizar(app, "P002", "t-same")
+    out = app.invoke({"query": "¿Qué pasó con el paciente P002 en el último mes?"}, _cfg("t-same"))
+
+    assert out["is_followup"] is True
+    assert out["active_patient_id"] == "P002"
+
+
+def test_reiniciar_vuelve_a_correr_el_pipeline(app):
+    _analizar(app, "P002", "t-reset")
+    out = app.invoke({"query": "reiniciar el análisis"}, _cfg("t-reset"))
+
+    assert out["is_followup"] is False
+    assert out["patient_id"] == "P002", "el reinicio conserva al paciente activo"
+    assert out["iteration"] == 1, "el pipeline corre de nuevo desde la iteración 1"
+    assert out["analysis"] is not None
 
 
 # -------------------------------------------------------------------

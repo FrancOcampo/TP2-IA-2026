@@ -3,33 +3,46 @@
 # Lógica de routing del Orquestador, separada del grafo para poder testearla
 # de forma aislada y reemplazarla luego por una clasificación vía LLM.
 
+import re
+
 from orchestrator.state import AgentState
 
 # Palabras clave de confirmación / cancelación del guardado de sesión
 _CONFIRM_WORDS = {"confirmar", "confirm", "sí", "si", "yes"}
 _CANCEL_WORDS = {"cancelar", "cancel", "no"}
 
+# Id de paciente mencionado en un mensaje (P001, P123…)
+_PATIENT_ID_RE = re.compile(r"\bP\d{3,}\b", re.IGNORECASE)
+
+# Frases que piden empezar de cero sobre el paciente activo
+_RESET_PHRASES = ("reiniciar", "reinicia", "nuevo análisis", "nuevo analisis",
+                  "analizá de nuevo", "analiza de nuevo", "analizar de nuevo")
+
+
+def extract_patient_id(message: str) -> str | None:
+    """Devuelve el primer id de paciente (p. ej. 'P003') mencionado en el mensaje, o None."""
+    match = _PATIENT_ID_RE.search(message or "")
+    return match.group(0).upper() if match else None
+
+
+def is_reset_message(message: str) -> bool:
+    """Detecta si el médico pide reiniciar el análisis del paciente activo."""
+    text = (message or "").lower()
+    return any(phrase in text for phrase in _RESET_PHRASES)
+
 
 def is_followup_message(state: AgentState, message: str) -> bool:
     """
-    Determina si el mensaje del médico es un follow-up sobre el reporte ya
-    generado o una consulta nueva que requiere el pipeline completo.
+    Determina si el mensaje es un follow-up sobre el reporte ya generado (hay reporte
+    en el estado) o una consulta nueva que requiere el pipeline completo.
 
-    Criterio simple: si hay reporte en el estado y el mensaje no menciona
-    explícitamente un paciente distinto → es follow-up.
+    No decide el cambio de paciente ni el reinicio: eso lo resuelve el Orquestador
+    (`orchestrator_node`) comparando contra `active_patient_id`, porque acá
+    `state["patient_id"]` ya fue pisado por el input de la invocación (F1-02).
 
     TODO: reemplazar con clasificación vía LLM del Orquestador.
     """
-    if not state.get("report"):
-        return False
-
-    # Si el mensaje habla de un paciente cuyo id no coincide con el activo
-    # → es una consulta nueva, no un seguimiento.
-    patient_id = state.get("patient_id")
-    if "paciente" in message.lower() and patient_id and patient_id not in message:
-        return False
-
-    return True
+    return bool(state.get("report"))
 
 
 def is_confirmation_message(message: str) -> bool:
