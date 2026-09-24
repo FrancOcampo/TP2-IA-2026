@@ -64,7 +64,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F3-05** | [EAS-24](https://linear.app/easymetricdev/issue/EAS-24) | Contexto del modo seguimiento compacto | 🟢 Baja | F1-03 | ⬜ |
 | **F3-06** | [EAS-25](https://linear.app/easymetricdev/issue/EAS-25) | Robustez de tools y marca de modo de ejecución en el estado | 🟡 Media | — | ⬜ |
 | **F3-07** | [EAS-26](https://linear.app/easymetricdev/issue/EAS-26) | Campo "Orientación del análisis" en la UI | 🟢 Baja | F3-01 | ⬜ |
-| **F4-01** | [EAS-27](https://linear.app/easymetricdev/issue/EAS-27) | Modelo por defecto alineado con el artículo | 🟢 Baja | — | ⬜ |
+| **F4-01** | [EAS-27](https://linear.app/easymetricdev/issue/EAS-27) | Modelo por defecto alineado con el artículo | 🟢 Baja | — | ✅ (MVP-03) |
 | **F4-02** | [EAS-28](https://linear.app/easymetricdev/issue/EAS-28) | Serialización de modelos Pydantic en el checkpointer | 🟡 Media | — | ⬜ |
 | **F4-03** | [EAS-29](https://linear.app/easymetricdev/issue/EAS-29) | Limpieza de dependencias y `main.py` | 🟢 Baja | — | ⬜ |
 | **F4-04** | [EAS-30](https://linear.app/easymetricdev/issue/EAS-30) | Codificación UTF-8 de logs en consola Windows | 🟢 Baja | — | ⬜ |
@@ -598,7 +598,7 @@ El wrapper solo recibe `query` ([clinical.py:59-66](../agents/clinical.py#L59));
 ### F4-01 · Modelo por defecto alineado con el artículo
 El artículo declara **Llama 3.3 70B en Groq**; el default del código es `qwen/qwen3-32b` ([llm_factory.py:61](../agents/llm_factory.py#L61), duplicado en [eval_runner.py:67](../tests/eval_runner.py#L67)).
 **Cambio:** default `llama-3.3-70b-versatile`, una sola constante exportada desde `llm_factory` que usa también `eval_runner`; `.env.example` actualizado. (Alternativa: actualizar el artículo; decidir y registrar acá.)
-- [ ] Aceptación: `_active_model()` y `build_llm()` leen la misma constante.
+- [x] Aceptación: `active_model()` (exportada por `llm_factory`, usada por `build_llm()` y `eval_runner`) lee `DEFAULT_MODELS`; default Groq `llama-3.3-70b-versatile` (`tests/test_llm_factory.py`).
 
 ### F4-02 · Serialización de modelos Pydantic en el checkpointer
 Al reanudar un thread, LangGraph advierte: *"Deserializing unregistered type orchestrator.state.MonitorAnalysis… will be blocked in a future version"*. Con una actualización de LangGraph, los seguimientos dejarían de funcionar.

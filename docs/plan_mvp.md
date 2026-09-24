@@ -35,7 +35,7 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 |---|---|---|---|
 | **MVP-01** | Historial de pacientes en SQLite local, detrás de una interfaz `HistoryStore` (Mongo queda como backend opcional) | F2-08 | ✅ |
 | **MVP-02** | RAG sin Ollama: embeddings locales por defecto, ingesta idempotente con `--rebuild`, error claro si falta el índice | F2-06 (2, 3) | ⬜ |
-| **MVP-03** | Configuración del LLM: una sola constante de modelo, alias de la API key de Gemini, error claro sin key | F4-01 | ⬜ |
+| **MVP-03** | Configuración del LLM: una sola constante de modelo, alias de la API key de Gemini, error claro sin key | F4-01 | ✅ |
 | **MVP-04** | Arranque en un comando: `main.py` inicializa base + índice si faltan y lanza la UI; logs UTF-8 | F4-03 (`main.py`), F4-04 | ⬜ |
 
 ### M2 · Correctitud del flujo (ya planificado)

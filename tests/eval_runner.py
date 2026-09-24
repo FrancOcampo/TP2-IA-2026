@@ -22,7 +22,6 @@
 import argparse
 import json
 import logging
-import os
 import sys
 import time
 from datetime import datetime
@@ -39,7 +38,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from agents.llm_factory import has_api_key
+from agents.llm_factory import active_model, has_api_key
 from orchestrator.graph import build_graph
 
 CASES_DIR = Path(__file__).parent / "cases"
@@ -59,13 +58,6 @@ def _load_all_cases() -> list[dict]:
     for category in CATEGORIES:
         cases.extend(json.loads((CASES_DIR / f"{category}.json").read_text(encoding="utf-8")))
     return cases
-
-
-def _active_model() -> tuple[str, str]:
-    """Proveedor y modelo activos (para registrar contra qué se evaluó)."""
-    provider = os.getenv("LLM_PROVIDER", "groq").lower()
-    default_model = "gemma-4-31b-it" if provider == "gemini" else "qwen/qwen3-32b"
-    return provider, os.getenv("LLM_MODEL", default_model)
 
 
 def _split_multi(values: list[str] | None) -> list[str]:
@@ -224,7 +216,7 @@ def main() -> None:
               "evaluación cualitativa no tendría sentido. Configurá GROQ_API_KEY/GOOGLE_API_KEY.")
         sys.exit(1)
 
-    provider, model = _active_model()
+    provider, model = active_model()
     out_path = args.output
 
     # Historial append-only: cargamos las corridas previas (salvo --overwrite) y al final

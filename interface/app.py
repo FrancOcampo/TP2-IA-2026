@@ -17,6 +17,7 @@ load_dotenv()
 
 import gradio as gr
 
+from agents.llm_factory import has_api_key, llm_status
 from orchestrator.graph import app as langgraph_app
 from interface.logging_config import setup_logging, get_callbacks, tracing_status
 from interface.components import (
@@ -433,6 +434,8 @@ def build_demo() -> gr.Blocks:
             "</span></div>",
             elem_classes="tp2-header-wrap",
         )
+        # Modo de ejecución visible: sin API key los reportes son de los fallbacks determinísticos.
+        gr.Markdown(("🟢 " if has_api_key() else "⚠️ ") + llm_status())
 
         thread_state = gr.State("")
 
