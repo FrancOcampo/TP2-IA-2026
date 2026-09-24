@@ -33,7 +33,7 @@ código. Ver también [docs/logs.md](docs/logs.md) (cómo leer las trazas/observ
 
 - **uv** gestiona el entorno (instalado en `C:\Users\marco\.local\bin`; en terminales
   nuevas ya está en el PATH).
-- LLM: Groq `llama-3.3-70b` · Embeddings: Ollama `nomic-embed-text` · Vector store:
+- LLM: Groq `llama-3.3-70b-versatile` por defecto (`LLM_PROVIDER`/`LLM_MODEL`; defaults en `agents/llm_factory.DEFAULT_MODELS`; Gemini acepta `GOOGLE_API_KEY` o `GEMINI_API_KEY`) · Embeddings: Ollama `nomic-embed-text` · Vector store:
   ChromaDB (solo guías) · Historial: **SQLite local** por defecto, MongoDB opcional (`HISTORY_BACKEND`, ADR-0005) · Validación: Pydantic v2 ·
   Interfaz: **Gradio** (decisión del equipo; la dependencia `streamlit` sigue en
   `pyproject.toml` pero no se usa) · Observabilidad: **LangSmith + logging propio**
