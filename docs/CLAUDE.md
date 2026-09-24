@@ -161,7 +161,7 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
 | Módulo | Estado |
 |---|---|
 | `state.py`, `prompts.py` | ✅ completos y verificados |
-| `graph.py`, `router.py` | ✅ grafo funcional end-to-end; Monitor y Clínico reales; routing heurístico |
+| `graph.py`, `router.py` | ✅ grafo funcional end-to-end; Monitor y Clínico reales; routing heurístico con **paciente activo** (`active_patient_id`): el cambio de paciente o el reinicio limpian el estado derivado (ADR-0004) |
 | `agents/monitor.py` | ✅ **Agente Monitor real**: loop ReAct (ChatGroq + 4 tools LangChain), fallback determinístico sin API key, produce `MonitorAnalysis` |
 | `agents/clinical.py` | ✅ **Agente Clínico real**: loop ReAct (ChatGroq + 3 tools LangChain), fallback determinístico sin API key, modos reporte/seguimiento |
 | Tools del Monitor (EHR/umbrales) + `data/sample/` | ✅ `patient_tools.py` y `threshold_tools.py` listos y testeados; envueltas como `@tool` LangChain en `agents/monitor.py`; CSVs P001–P004 creados |
