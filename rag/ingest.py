@@ -12,6 +12,7 @@
 # ══════════════════════════════════════════════════════════════
 
 import argparse
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -61,15 +62,41 @@ MIN_CHUNK_SIZE = CHUNK_SIZE // 2
 # Implementación
 # ──────────────────────────────────────────────────────────────
 
-def load_markdown_files(guias_dir: Path) -> list[dict]:
-    """Lee todos los .md de guias_dir. Devuelve lista de {source, text}."""
+# Guías que NO se indexan, con el motivo. ADA_2024.md solo tiene la introducción y la
+# metodología (S1–S4): indexarla deja que el LLM la cite como respaldo de umbrales que no
+# contiene (plan F2-06, ADR-0013). Se vuelve a indexar cuando tenga contenido clínico.
+EXCLUDED_GUIDES = {
+    "ADA_2024.md": "solo introducción y metodología; sin contenido clínico (F2-06)",
+}
+
+
+def load_markdown_files(guias_dir: Path, verbose: bool = True) -> list[dict]:
+    """Lee los .md de guias_dir que no estén en EXCLUDED_GUIDES. Devuelve lista de {source, text}."""
     docs = []
     for path in sorted(guias_dir.glob("*.md")):
+        if path.name in EXCLUDED_GUIDES:
+            if verbose:
+                print(f"  Excluida: {path.name} ({EXCLUDED_GUIDES[path.name]})")
+            continue
         text = path.read_text(encoding="utf-8").strip()
         if text:
             docs.append({"source": path.name, "text": text})
-            print(f"  Cargado: {path.name} ({len(text):,} caracteres)")
+            if verbose:
+                print(f"  Cargado: {path.name} ({len(text):,} caracteres)")
     return docs
+
+
+def corpus_fingerprint(docs: list[dict]) -> str:
+    """
+    Huella del índice: guías incluidas (nombre + contenido) y parámetros de chunking. Se guarda
+    en la colección; si cambia, el índice está desactualizado y `index_ready()` da False.
+    """
+    h = hashlib.sha256()
+    h.update(repr((CHUNK_SIZE, CHUNK_OVERLAP, MIN_CHUNK_SIZE, SEPARATORS)).encode())
+    for doc in sorted(docs, key=lambda d: d["source"]):
+        h.update(doc["source"].encode())
+        h.update(doc["text"].encode())
+    return h.hexdigest()[:16]
 
 
 _HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
@@ -161,6 +188,15 @@ def build_collection(docs: list[dict], collection: chromadb.Collection, batch_si
     return total
 
 
+def _remove_other_sources(collection: chromadb.Collection, docs: list[dict]) -> None:
+    """Borra los chunks de guías que ya no se indexan (eliminadas o excluidas)."""
+    sources = [d["source"] for d in docs]
+    stale = collection.get(where={"source": {"$nin": sources}}, include=[])["ids"]
+    if stale:
+        print(f"  Quitando {len(stale)} chunk(s) de guías que ya no se indexan.")
+        collection.delete(ids=stale)
+
+
 def open_collection(client, rebuild: bool = False) -> chromadb.Collection:
     """
     Abre (o crea) la colección con el embedding activo. Con `rebuild`, o si la colección
@@ -183,12 +219,20 @@ def open_collection(client, rebuild: bool = False) -> chromadb.Collection:
 
 
 def index_ready() -> bool:
-    """True si el índice existe, tiene chunks y usa el embedding activo (no hace falta ingestar)."""
+    """
+    True si el índice existe, tiene chunks, usa el embedding activo y corresponde a las guías y
+    parámetros actuales (`corpus_fingerprint`). Si no, hay que ingestar.
+    """
     if not CHROMA_DIR.exists():
         return False
     try:
         col = chromadb.PersistentClient(path=str(CHROMA_DIR)).get_collection(COLLECTION_NAME)
-        return (col.metadata or {}).get("embedding") == embedding_id() and col.count() > 0
+        meta = col.metadata or {}
+        return (
+            meta.get("embedding") == embedding_id()
+            and meta.get("fingerprint") == corpus_fingerprint(load_markdown_files(GUIAS_DIR, verbose=False))
+            and col.count() > 0
+        )
     except Exception:
         return False
 
@@ -209,7 +253,12 @@ def ingest(rebuild: bool = False) -> int:
     collection = open_collection(client, rebuild=rebuild)
 
     print("Indexando chunks...\n")
+    _remove_other_sources(collection, docs)
     total = build_collection(docs, collection)
+    # La huella se registra al final: un índice a medio hacer no queda marcado como listo.
+    # Chroma no admite reenviar las claves hnsw:* (la distancia queda en la configuración).
+    metadata = {k: v for k, v in (collection.metadata or {}).items() if not k.startswith("hnsw:")}
+    collection.modify(metadata={**metadata, "fingerprint": corpus_fingerprint(docs)})
     print(f"\nTotal chunks en la colección: {collection.count()} ({total} de esta corrida)")
     print("Ingestión completada.")
     return total

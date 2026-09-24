@@ -67,7 +67,7 @@ def tool_compare_with_previous_sessions(patient_id: str) -> str:
 
 @tool
 def tool_search_clinical_guidelines(query: str) -> str:
-    """Busca fragmentos relevantes de las guías clínicas (ADA, SAD, MSAL) basados en el query.
+    """Busca fragmentos relevantes de las guías clínicas (SAD 2025 y Guía Nacional/MSAL 2019) basados en el query.
 
     Args:
         query: consulta de búsqueda (ej. "objetivo HbA1c" o "hipoglucemia severa")

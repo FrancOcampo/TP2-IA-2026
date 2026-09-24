@@ -32,6 +32,11 @@ Un corte en separador solo se acepta en la segunda mitad de la ventana (`CHUNK_S
 no había mínimo: un título al principio de la ventana generaba cortes de pocos caracteres y el
 índice tenía **22 932 chunks, 89 % de menos de 100 caracteres** (hoy 2450, ninguno < 100).
 
+### `EXCLUDED_GUIDES` y huella del índice
+Guías de `data/guias/` que no se indexan, con su motivo (hoy `ADA_2024.md`: solo introducción).
+La colección guarda `fingerprint` (guías incluidas + parámetros de chunking): si cambia algo,
+`main.py` reindexa solo ([ADR-0013](../docs/adr/0013-corpus-sin-ada-y-huella-del-indice.md)).
+
 ### Metadata por chunk
 `source` (archivo), `chunk_index` y `section` (último título Markdown anterior al chunk).
 

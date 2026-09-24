@@ -54,7 +54,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F2-03** | [EAS-14](https://linear.app/easymetricdev/issue/EAS-14) | Alertas trazables (umbral explícito) y agrupadas por episodio | 🟡 Media | F2-01 | ⬜ |
 | **F2-04** | [EAS-15](https://linear.app/easymetricdev/issue/EAS-15) | `compare_with_previous_sessions` no compara ni clasifica | 🟠 Alta | F1-04 | ⬜ |
 | **F2-05** | [EAS-16](https://linear.app/easymetricdev/issue/EAS-16) | `search_clinical_guidelines` sin parámetro de contexto | 🟡 Media | F2-06 | ⬜ |
-| **F2-06** | [EAS-17](https://linear.app/easymetricdev/issue/EAS-17) | Corpus ADA 2024 vacío (solo introducción) + ingesta no idempotente | 🟠 Alta | — | ⬜ |
+| **F2-06** | [EAS-17](https://linear.app/easymetricdev/issue/EAS-17) | Corpus ADA 2024 vacío (solo introducción) + ingesta no idempotente | 🟠 Alta | — | 🟨 (2 y 3 ✅; ADA excluida del corpus, contenido pendiente) |
 | **F2-07** | [EAS-18](https://linear.app/easymetricdev/issue/EAS-18) | Documento del paciente sin diagnósticos/comorbilidades; sesiones previas de ejemplo | 🟡 Media | F1-04 | ✅ |
 | **F2-08** | [EAS-19](https://linear.app/easymetricdev/issue/EAS-19) | Conexiones MongoDB sin reutilizar / sin cerrar | 🟢 Baja | — | ✅ (MVP-01) |
 | **F3-01** | [EAS-20](https://linear.app/easymetricdev/issue/EAS-20) | Orquestador con salida estructurada del LLM (+ nodo de aclaración) | 🟠 Alta | F1-02, F1-04 | ⬜ |
@@ -431,7 +431,7 @@ El wrapper solo recibe `query` ([clinical.py:59-66](../agents/clinical.py#L59));
 > MVP-02 corrigió además un bug del chunker (22 932 chunks → 2450) y cambió los embeddings a locales ([ADR-0006](adr/0006-embeddings-locales-sin-ollama.md)). El punto 1 (corpus ADA) sigue pendiente.
 
 **Aceptación**
-- [ ] Query "hipoglucemia nivel 2 < 54 mg/dL" devuelve un fragmento de `ADA_2024.md`.
+- [ ] Query "hipoglucemia nivel 2 < 54 mg/dL" devuelve un fragmento de `ADA_2024.md`. **Abierto:** por ahora ADA está excluida de la ingesta y el prompt no pide citarla ([ADR-0013](adr/0013-corpus-sin-ada-y-huella-del-indice.md)); incorporar las secciones requiere decisión del equipo (derechos de autor).
 - [x] Correr `ingest.py` dos veces no duplica ni falla; `--rebuild` reindexa (`tests/test_rag_ingest.py`).
 
 ---
