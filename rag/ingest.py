@@ -1,33 +1,37 @@
 # rag/ingest.py
 #
 # Etapa 1 del pipeline RAG: lee las guías clínicas en Markdown, las divide en
-# chunks, genera embeddings con nomic-embed-text (Ollama) y los indexa en ChromaDB.
+# chunks, genera embeddings (locales por defecto; ver rag/config.py) y los indexa en ChromaDB.
 #
-# Ejecutar una sola vez (o cada vez que cambian las guías):
-#   uv run python rag/ingest.py
+# Ejecutar una vez (main.py lo hace solo si falta el índice) o cada vez que cambian las guías:
+#   uv run python rag/ingest.py            # idempotente: upsert por id de chunk
+#   uv run python rag/ingest.py --rebuild  # borra la colección y reindexa desde cero
 #
 # ══════════════════════════════════════════════════════════════
 #  PARÁMETROS TUNABLES — afectan directamente la calidad del RAG
 # ══════════════════════════════════════════════════════════════
 
+import argparse
+import re
+import sys
 from pathlib import Path
 
 import chromadb
-from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 
-# ── Fuente ────────────────────────────────────────────────────
-GUIAS_DIR = Path(__file__).resolve().parent.parent / "data" / "guias"
+# Permite correrlo como script (`python rag/ingest.py`) además de importarlo.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# ── ChromaDB ──────────────────────────────────────────────────
-CHROMA_DIR = Path(__file__).resolve().parent.parent / "data" / "chroma_db"
-COLLECTION_NAME = "guias_clinicas"
+from rag.config import (  # noqa: E402
+    CHROMA_DIR,
+    COLLECTION_NAME,
+    GUIAS_DIR,
+    embedding_id,
+    get_embedding_function,
+)
 
 # ── Modelo de embeddings ───────────────────────────────────────
-# TUNABLE: cambiar el modelo cambia la dimensión del vector y la calidad semántica.
-# Opciones probadas con Ollama: "nomic-embed-text" (768d), "mxbai-embed-large" (1024d).
-# Si cambiás esto, borrá data/chroma_db/ y re-ingestás (los vectores son incompatibles).
-EMBEDDING_MODEL = "nomic-embed-text"
-OLLAMA_URL = "http://localhost:11434"
+# TUNABLE: se elige con EMBEDDING_PROVIDER (rag/config.py). Cambiarlo exige --rebuild:
+# los vectores de modelos distintos son incompatibles.
 
 # ── Chunking ───────────────────────────────────────────────────
 # TUNABLE: chunk_size controla cuánto texto entra en cada fragmento.
@@ -47,6 +51,11 @@ CHUNK_OVERLAP = 50
 # Agregar "\n## " o "\n### " si las guías tienen secciones bien marcadas.
 SEPARATORS = ["\n## ", "\n### ", "\n\n", "\n", ". ", " "]
 
+# Un corte en separador solo se acepta en la segunda mitad de la ventana. Sin este mínimo,
+# un título al principio de la ventana producía un corte a pocos caracteres y el chunk
+# siguiente avanzaba de a 1 carácter: miles de fragmentos diminutos y casi repetidos.
+MIN_CHUNK_SIZE = CHUNK_SIZE // 2
+
 
 # ──────────────────────────────────────────────────────────────
 # Implementación
@@ -63,12 +72,16 @@ def load_markdown_files(guias_dir: Path) -> list[dict]:
     return docs
 
 
-def split_text(text: str) -> list[str]:
+_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
+
+
+def _split_spans(text: str) -> list[tuple[int, int]]:
     """
-    Divide text en chunks respetando los SEPARATORS (en orden de preferencia).
-    Garantiza que ningún chunk supere CHUNK_SIZE y que haya CHUNK_OVERLAP de solapamiento.
+    Posiciones (inicio, fin) de cada chunk en `text`, respetando los SEPARATORS (en orden
+    de preferencia). Garantiza que ningún chunk supere CHUNK_SIZE, que cada corte (salvo
+    el último) deje al menos MIN_CHUNK_SIZE caracteres y que haya CHUNK_OVERLAP de solapamiento.
     """
-    chunks = []
+    spans = []
     start = 0
     text_len = len(text)
 
@@ -79,44 +92,109 @@ def split_text(text: str) -> list[str]:
         if end < text_len:
             cut = end
             for sep in SEPARATORS:
-                pos = text.rfind(sep, start, end)
+                pos = text.rfind(sep, start + MIN_CHUNK_SIZE, end)
                 if pos != -1:
                     cut = pos + len(sep)
                     break
             end = cut
 
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
+        if text[start:end].strip():
+            spans.append((start, end))
+        if end >= text_len:
+            break
 
         # El siguiente chunk empieza CHUNK_OVERLAP caracteres antes del corte
         start = max(start + 1, end - CHUNK_OVERLAP)
 
+    return spans
+
+
+def split_text(text: str) -> list[str]:
+    """Divide text en chunks (ver _split_spans)."""
+    return [text[a:b].strip() for a, b in _split_spans(text)]
+
+
+def chunk_document(doc: dict) -> list[dict]:
+    """
+    Chunks de un documento con su metadata: `source`, `chunk_index` y `section` (último
+    título Markdown anterior al inicio del chunk; "" si no hay). Ids estables por posición.
+    """
+    text = doc["text"]
+    headings = [(m.start(), m.group(1)) for m in _HEADING_RE.finditer(text)]
+    chunks = []
+    for i, (start, end) in enumerate(_split_spans(text)):
+        section = ""
+        for pos, title in headings:
+            if pos > start:
+                break
+            section = title
+        chunks.append({
+            "id": f"{doc['source']}::chunk{i}",
+            "text": text[start:end].strip(),
+            "metadata": {"source": doc["source"], "chunk_index": i, "section": section[:200]},
+        })
     return chunks
 
 
-def build_collection(docs: list[dict], collection: chromadb.Collection) -> int:
-    """Chunkea los documentos y los agrega a la colección ChromaDB. Devuelve total de chunks."""
+def build_collection(docs: list[dict], collection: chromadb.Collection, batch_size: int = 64) -> int:
+    """
+    Indexa los documentos con `upsert` (re-ingestar no duplica) y borra los chunks viejos de
+    cada fuente que ya no existen (p. ej. si una guía se acortó). Devuelve el total de chunks.
+    """
     total = 0
     for doc in docs:
-        chunks = split_text(doc["text"])
-        batch_size = 50
+        chunks = chunk_document(doc)
+        new_ids = {c["id"] for c in chunks}
+        stale = [i for i in collection.get(where={"source": doc["source"]}, include=[])["ids"]
+                 if i not in new_ids]
+        if stale:
+            collection.delete(ids=stale)
         for idx in range(0, len(chunks), batch_size):
-            batch_chunks = chunks[idx : idx + batch_size]
-            batch_ids = [f"{doc['source']}::chunk{i}" for i in range(idx, min(idx + batch_size, len(chunks)))]
-            batch_metadatas = [{"source": doc["source"], "chunk_index": i} for i in range(idx, min(idx + batch_size, len(chunks)))]
-            collection.add(
-                ids=batch_ids,
-                documents=batch_chunks,
-                metadatas=batch_metadatas,
+            batch = chunks[idx: idx + batch_size]
+            collection.upsert(
+                ids=[c["id"] for c in batch],
+                documents=[c["text"] for c in batch],
+                metadatas=[c["metadata"] for c in batch],
             )
         print(f"  {doc['source']}: {len(chunks)} chunks indexados")
         total += len(chunks)
     return total
 
 
-def ingest() -> None:
-    print(f"Modelo de embeddings : {EMBEDDING_MODEL}")
+def open_collection(client, rebuild: bool = False) -> chromadb.Collection:
+    """
+    Abre (o crea) la colección con el embedding activo. Con `rebuild`, o si la colección
+    existente se indexó con otro embedding, la borra y la recrea (vectores incompatibles).
+    """
+    existing = {c.name if hasattr(c, "name") else c for c in client.list_collections()}
+    if COLLECTION_NAME in existing:
+        current = client.get_collection(COLLECTION_NAME).metadata or {}
+        if rebuild or current.get("embedding") != embedding_id():
+            print(f"Borrando la colección existente (embedding: {current.get('embedding', '?')}).")
+            client.delete_collection(COLLECTION_NAME)
+    return client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        embedding_function=get_embedding_function(),
+        # TUNABLE: función de distancia entre vectores.
+        # "cosine" es la más común para similitud semántica de texto.
+        # Otras opciones: "l2" (distancia euclidiana), "ip" (inner product).
+        metadata={"hnsw:space": "cosine", "embedding": embedding_id()},
+    )
+
+
+def index_ready() -> bool:
+    """True si el índice existe, tiene chunks y usa el embedding activo (no hace falta ingestar)."""
+    if not CHROMA_DIR.exists():
+        return False
+    try:
+        col = chromadb.PersistentClient(path=str(CHROMA_DIR)).get_collection(COLLECTION_NAME)
+        return (col.metadata or {}).get("embedding") == embedding_id() and col.count() > 0
+    except Exception:
+        return False
+
+
+def ingest(rebuild: bool = False) -> int:
+    print(f"Embeddings           : {embedding_id()}")
     print(f"Chunk size / overlap : {CHUNK_SIZE} / {CHUNK_OVERLAP}")
     print(f"Guías desde          : {GUIAS_DIR}")
     print(f"ChromaDB en          : {CHROMA_DIR}\n")
@@ -124,32 +202,22 @@ def ingest() -> None:
     docs = load_markdown_files(GUIAS_DIR)
     if not docs:
         print("No se encontraron archivos .md en data/guias/. Abortando.")
-        return
+        return 0
 
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-
-    embedding_fn = OllamaEmbeddingFunction(
-        model_name=EMBEDDING_MODEL,
-        url=OLLAMA_URL,
-    )
-
-    # get_or_create: idempotente; si ya existe la colección, la reutiliza.
-    # Para re-indexar desde cero: borrar data/chroma_db/ y volver a correr.
-    collection = client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        embedding_function=embedding_fn,
-        # TUNABLE: función de distancia entre vectores.
-        # "cosine" es la más común para similitud semántica de texto.
-        # Otras opciones: "l2" (distancia euclidiana), "ip" (inner product).
-        metadata={"hnsw:space": "cosine"},
-    )
+    collection = open_collection(client, rebuild=rebuild)
 
     print("Indexando chunks...\n")
     total = build_collection(docs, collection)
-    print(f"\nTotal chunks en la colección: {total}")
+    print(f"\nTotal chunks en la colección: {collection.count()} ({total} de esta corrida)")
     print("Ingestión completada.")
+    return total
 
 
 if __name__ == "__main__":
-    ingest()
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    parser = argparse.ArgumentParser(description="Indexa las guías clínicas en ChromaDB.")
+    parser.add_argument("--rebuild", action="store_true", help="borra la colección y reindexa desde cero")
+    ingest(rebuild=parser.parse_args().rebuild)

@@ -4,24 +4,36 @@ Referencia rápida para ajustar la calidad del pipeline RAG sin tener que leer
 el código. Cada parámetro indica en qué archivo vive y qué efecto produce.
 
 **Regla general:** después de cambiar cualquier parámetro de ingestión
-(`CHUNK_SIZE`, `CHUNK_OVERLAP`, `SEPARATORS`, `EMBEDDING_MODEL`), hay que
-borrar `data/chroma_db/` y volver a correr `uv run python rag/ingest.py`.
+(`CHUNK_SIZE`, `CHUNK_OVERLAP`, `SEPARATORS`, `MIN_CHUNK_SIZE`, `EMBEDDING_PROVIDER`), correr
+`uv run python rag/ingest.py --rebuild`. Sin `--rebuild` la ingesta es idempotente (upsert por id
+de chunk) y borra los chunks que ya no existen; si el embedding activo no coincide con el del índice,
+el índice se recrea solo y el retriever avisa en vez de devolver resultados incompatibles.
 Los parámetros de retrieval (`k`, `DISTANCE_THRESHOLD`) no requieren re-ingestión.
 
 ---
 
 ## Ingestión (`rag/ingest.py`)
 
-### `EMBEDDING_MODEL`
-Modelo que convierte texto en vectores numéricos.
+### `EMBEDDING_PROVIDER` (`.env`, definido en `rag/config.py`)
+Modelo que convierte texto en vectores numéricos ([ADR-0006](../docs/adr/0006-embeddings-locales-sin-ollama.md)).
 
-| Valor | Dimensión | Cuándo usarlo |
-|---|---|---|
-| `"nomic-embed-text"` (default) | 768 | Buena calidad, liviano, corre en CPU |
-| `"mxbai-embed-large"` | 1024 | Mejor calidad semántica, más lento |
+| Valor | Modelo | Dimensión | Cuándo usarlo |
+|---|---|---|---|
+| `local` (default) | ONNX `all-MiniLM-L6-v2` integrado en ChromaDB | 384 | Sin servicios; ~80 MB descargados la primera vez |
+| `ollama` | `nomic-embed-text` (`OLLAMA_EMBEDDING_MODEL`) | 768 | Si hay Ollama instalado (`ollama pull nomic-embed-text`) |
 
-Cambiar el modelo requiere re-ingestión completa (los vectores son incompatibles).
-Instalar con: `ollama pull <nombre-del-modelo>`.
+Cambiar el proveedor requiere `--rebuild` (los vectores son incompatibles).
+
+**Medición de referencia (2026-09-24, `local`):** 2450 chunks, indexado en ~2.5 min en CPU; 10 consultas
+en español con palabras clave esperadas en el top-3 → 9/10 (falla "control de lípidos con estatinas").
+
+### `MIN_CHUNK_SIZE`
+Un corte en separador solo se acepta en la segunda mitad de la ventana (`CHUNK_SIZE // 2`). Antes
+no había mínimo: un título al principio de la ventana generaba cortes de pocos caracteres y el
+índice tenía **22 932 chunks, 89 % de menos de 100 caracteres** (hoy 2450, ninguno < 100).
+
+### Metadata por chunk
+`source` (archivo), `chunk_index` y `section` (último título Markdown anterior al chunk).
 
 ---
 
