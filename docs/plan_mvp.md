@@ -71,5 +71,14 @@ F2-02 (PA/peso), F2-03 (episodios), F2-04 (clasificación longitudinal), F2-05 (
 
 ## Qué hace falta del equipo
 
-- **Una API key de LLM**: Groq (gratis, `llama-3.3-70b-versatile`, el modelo del artículo) o Gemini.
-- **Validación clínica** de la tabla de metas de F2-01 (no bloquea el MVP, sí su cierre formal).
+Estado al 2026-09-24: M1, M2 y M3 hechos y mergeados en `develop` (sin push). Gate: 139 passed.
+
+| # | Pendiente | Quién | Bloquea |
+|---|---|---|---|
+| 1 | **API key de LLM** en `.env`: Groq (`GROQ_API_KEY`, gratis, `llama-3.3-70b-versatile`) o Gemini (`LLM_PROVIDER=gemini` + `GEMINI_API_KEY`) | Franco | Corrida del `eval_runner` con LLM real (último ítem de M4) |
+| 2 | **Autorizar Linear** en Claude Code para sincronizar: EAS-7…EAS-12, EAS-17, EAS-18 → estado real; EAS-19/EAS-27 absorbidos por MVP-01/MVP-03; crear issues para MVP-01…MVP-05 | Franco | Consistencia del tablero |
+| 3 | **Validación clínica 🩺** de la tabla de metas de control ([ADR-0011](adr/0011-metas-de-control-dm2.md)), dejando fecha y quién en F2-01 | Equipo | Cierre formal de F2-01 |
+| 4 | **Contenido ADA**: decidir si se incorporan las secciones 2/6/9/10 de los *Standards 2024* (derechos de autor) o se quitan las menciones a ADA del artículo ([ADR-0013](adr/0013-corpus-sin-ada-y-huella-del-indice.md)) | Equipo | Cierre de F2-06 |
+| 5 | **Push** de `develop` a `origin` | Franco | Que el equipo vea los cambios |
+
+Después del MVP, el orden sigue el [plan de correcciones](plan_correcciones.md): F2-02…F2-05, Fase 3, Fase 4.
