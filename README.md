@@ -94,35 +94,20 @@ Detalle de los campos y eventos: [docs/logs.md](docs/logs.md). Más sobre la UI:
 ## Modo completo (LLM + datos reales)
 
 Opcional. Activa los **agentes ReAct reales** (en vez de los fallbacks) y consultas reales a
-MongoDB y al RAG. Requiere, además de `uv`:
+historial y al RAG. Requiere, además de `uv`:
 
 - **Groq API key** — LLM (`llama-3.3-70b`) de los agentes Monitor y Clínico.
 - **[Ollama](https://ollama.com/)** con el modelo `nomic-embed-text` — embeddings del RAG.
-- **MongoDB** local (Docker es lo más simple) — historial de pacientes.
 - **LangSmith API key** *(opcional)* — observabilidad en la nube.
 
 ### Preparación
 
 **1. Credenciales.** Completá `GROQ_API_KEY` (y, opcionalmente, `LANGSMITH_*`) en `.env`.
 
-**2. MongoDB (vía Docker o Local Nativo).** Levantá una instancia en el puerto `27017`:
-
-*   **Opción A (Docker Compose — recomendado):** con **Docker Desktop** abierto, desde la
-    raíz del repo:
-    ```bash
-    docker compose -f docker/docker-compose.yml up -d
-    ```
-    Levanta `mongo:7` (contenedor `tp2-mongo`), persiste en el volumen `tp2-mongo-data` y
-    crea la base `tp2_diabetes` con su índice. Detalle de comandos en
-    [docker/README.md](docker/README.md). *(Equivalente en un solo comando sin Compose:
-    `docker run -d --name tp2-mongo -p 27017:27017 -v tp2-mongo-data:/data/db mongo:7`.)*
-*   **Opción B (Local Nativo - Windows):** Si no usás Docker, podés iniciar MongoDB localmente con los binarios de tu instalación ejecutando:
-    ```powershell
-    & ".local\mongodb\bin\mongod.exe" --dbpath ".local\mongodb\data" --port 27017 --bind_ip_all --setParameter diagnosticDataCollectionEnabled=false
-    ```
-    *(El parámetro `--setParameter diagnosticDataCollectionEnabled=false` es fundamental en entornos Windows para prevenir crashes vinculados a la colección de datos de diagnóstico).*
-
-El código se conecta a `mongodb://localhost:27017` por defecto (db `tp2_diabetes`, colección `patients`). Si estás en Windows y experimentás problemas o demoras en la conexión por la resolución IPv6 de localhost, definí `MONGO_URI=mongodb://127.0.0.1:27017` en tu `.env`.
+**2. Historial de pacientes.** Por defecto es un archivo **SQLite local** (`data/tp2.db`, fuera de
+git): no hay que instalar nada. Para usar **MongoDB** (Docker o nube) definí
+`HISTORY_BACKEND=mongo` y `MONGO_URI` en `.env`; ver [docker/README.md](docker/README.md) y
+[ADR-0005](docs/adr/0005-historial-en-sqlite-local.md).
 
 **3. Ollama (embeddings del RAG).** Instalá [Ollama](https://ollama.com/), asegurate de que el
 servicio esté corriendo (`http://localhost:11434`) y descargá el modelo:
@@ -134,7 +119,7 @@ ollama pull nomic-embed-text
 **4. Cargar datos e indexar guías** (una sola vez):
 
 ```bash
-uv run python data/load_mongo.py    # carga los 4 pacientes en MongoDB
+uv run python data/load_history.py  # carga los pacientes en el historial (SQLite por defecto)
 uv run python rag/ingest.py         # indexa las guías clínicas en ChromaDB
 ```
 
@@ -146,7 +131,7 @@ uv run python rag/ingest.py         # indexa las guías clínicas en ChromaDB
 ### Verificación del modo completo
 
 ```bash
-uv run pytest -m integration        # requiere MongoDB + Ollama + ChromaDB activos
+uv run pytest -m integration        # requiere Ollama + ChromaDB indexado
 ```
 
 Con la infraestructura activa, al **Analizar** un paciente en la UI verás reportes redactados por
@@ -161,15 +146,10 @@ Una vez hecha la instalación y la carga inicial (pasos 1–4 de arriba), en el 
 uv run python -m interface.app    # interfaz web (modo completo) → http://127.0.0.1:7860
 ```
 
-Ollama (app de Windows) y el contenedor de Mongo (`restart: unless-stopped`) se auto-inician al
-encender la PC / abrir Docker Desktop, así que casi siempre solo hace falta ese comando. Si Mongo no quedó levantado, primero:
+Ollama (app de Windows) se auto-inicia al encender la PC, así que casi siempre solo hace falta ese comando.
 
-```bash
-docker compose -f docker/docker-compose.yml up -d
-```
-
-**No** hay que repetir `data/load_mongo.py` ni `rag/ingest.py`: se corren **una sola vez** (los
-datos persisten en el volumen de MongoDB y en `data/chroma_db/`). Solo se re-ejecutan si cambian
+**No** hay que repetir `data/load_history.py` ni `rag/ingest.py`: se corren **una sola vez** (los
+datos persisten en `data/tp2.db` y en `data/chroma_db/`). Solo se re-ejecutan si cambian
 los datos de los pacientes o las guías clínicas.
 
 ---
@@ -179,11 +159,11 @@ los datos de los pacientes o las guías clínicas.
 ```
 orchestrator/   state.py (estado + modelos) · graph.py (grafo LangGraph) · router.py (routing)
 agents/         prompts.py · monitor.py (ReAct) · clinical.py (ReAct)
-tools/          patient_tools.py · threshold_tools.py · mongo_tools.py · rag_tools.py
+tools/          patient_tools.py · threshold_tools.py · history_store.py · history_tools.py · rag_tools.py
 rag/            ingest.py (indexa en ChromaDB) · retriever.py (búsqueda)
-data/           generate_patients.py · load_mongo.py · guias/ · sample/ (fixture P001-P004)
+data/           generate_patients.py · load_history.py · guias/ · sample/ (fixture P001-P004)
 interface/      app.py (UI Gradio) · components.py (render) · logging_config.py (logs)
-tests/          test_graph.py · test_monitor_tools.py · test_clinico_tools.py (integración) · eval_runner.py · cases/ · ver docs/tests.md
+tests/          test_graph.py · test_monitor_tools.py · test_clinico_tools.py · test_history_store.py · eval_runner.py · cases/ · ver docs/tests.md
 docs/           definición conceptual, arquitectura (CLAUDE.md), interfaz, logs
 ```
 

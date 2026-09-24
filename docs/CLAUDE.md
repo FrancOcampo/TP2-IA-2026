@@ -34,7 +34,7 @@ código. Ver también [docs/logs.md](docs/logs.md) (cómo leer las trazas/observ
 - **uv** gestiona el entorno (instalado en `C:\Users\marco\.local\bin`; en terminales
   nuevas ya está en el PATH).
 - LLM: Groq `llama-3.3-70b` · Embeddings: Ollama `nomic-embed-text` · Vector store:
-  ChromaDB (solo guías) · Historial: **MongoDB** documental · Validación: Pydantic v2 ·
+  ChromaDB (solo guías) · Historial: **SQLite local** por defecto, MongoDB opcional (`HISTORY_BACKEND`, ADR-0005) · Validación: Pydantic v2 ·
   Interfaz: **Gradio** (decisión del equipo; la dependencia `streamlit` sigue en
   `pyproject.toml` pero no se usa) · Observabilidad: **LangSmith + logging propio**
   (consola legible + `logs/agent.jsonl`).
@@ -117,8 +117,8 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
 1. **Routing por inferencia de intención**, no por skills `/monitor` `/clinico`. El
    Orquestador lee `state["query"]` + estado y decide: pipeline completo / seguimiento
    directo al Clínico / reset / confirmación / aclaración.
-2. **Historial del paciente en MongoDB** (documento por paciente, búsqueda exacta por id,
-   **sin RAG**). RAG es exclusivo de las guías clínicas.
+2. **Historial del paciente en un almacén documental** (documento por paciente, búsqueda exacta por id,
+   **sin RAG**). Motor detrás de `HistoryStore`: SQLite local por defecto, MongoDB opcional (ADR-0005). RAG es exclusivo de las guías clínicas.
 3. **CGM = extensión futura/opcional**. `CGMMetrics`/`cgm_series` están definidos pero
    fuera del alcance de la implementación actual; marcado así en la def. conceptual.
 4. **Loop de refinamiento**: el Clínico expone `information_sufficient`; si es `False` e
@@ -172,14 +172,14 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
 | Observabilidad (`interface/logging_config.py`) | ✅ logging dual (consola + JSONL) + LangSmith; tracea nodos, routing, `llm_*` y `tool_*` (con nombre de tool y tokens) |
 | `interface/app.py` (Gradio) | ✅ UI completa: 3 pestañas (Consulta clínica + Observabilidad dev + Evaluación) contra el grafo real |
 | `tests/conftest.py`, `.env.example` (LangSmith) | ✅ `load_dotenv` + vars de tracing |
-| Tools de Mongo (`get_patient_history`, `compare_*`, `update_*`) | ✅ `tools/mongo_tools.py` real implementado (B); conectado al Agente Clínico |
+| Tools de historial (`get_patient_history`, `compare_*`, `update_*`) | ✅ `tools/history_tools.py` sobre `HistoryStore` (`tools/history_store.py`: SQLite por defecto, Mongo opcional; ADR-0005); conectado al Agente Clínico |
 | `data/generate_patients.py` | ✅ 4 perfiles sintéticos (P001–P004) generando CSVs en `data/sample/` |
-| MongoDB (schema + instancia + carga) | ✅ instancia en `localhost:27017` vía **Docker Compose** (`docker/docker-compose.yml`, contenedor `tp2-mongo`, volumen persistente, init script) **o** local nativo; `data/load_mongo.py` carga los 4 pacientes en `tp2_diabetes.patients` |
+| Historial (schema + carga) | ✅ `data/load_history.py` carga los pacientes de `data/sample/` en el almacén (`data/tp2.db` por defecto; idempotente, conserva sesiones). MongoDB opcional vía Docker Compose (`docker/`) |
 | RAG — ingestión (`rag/ingest.py`) | ✅ chunking + embeddings `nomic-embed-text` + ChromaDB persistido en `data/chroma_db/`; parámetros tunables en `rag/RAG_TUNING.md` |
 | RAG — retrieval (`rag/retriever.py`) | ✅ `search_clinical_guidelines()` + `get_rag_fragment()`; probar con `uv run python rag/retriever.py` |
 | RAG — tools LangChain (`tools/rag_tools.py`) | ✅ `search_clinical_guidelines_tool` y `get_rag_context_tool` listos para el Agente Clínico (C) |
 | `interface/components.py` | ✅ funciones puras de render (alertas, tendencias, perfil, reporte, visor de logs, visor de evaluación); testeables sin Gradio |
-| `tests/test_clinico_tools.py` | ✅ tools del Clínico (mongo_tools + RAG), integración (`@pytest.mark.integration`); requieren MongoDB+Ollama+ChromaDB |
+| `tests/test_clinico_tools.py`, `tests/test_history_store.py` | ✅ historial determinístico (SQLite temporal por test, `conftest.py`); RAG como integración (`@pytest.mark.integration`, requiere Ollama+ChromaDB) |
 | `tests/cases/*.json` + `tests/eval_runner.py` | ✅ evaluación **cualitativa** de la IA (9 casos: 3 happy / 3 edge / 3 adversarial); script (no pytest) que vuelca `logs/eval_report.json` con esperado vs. obtenido; se lee desde la pestaña **Evaluación** de la UI Gradio (selector de corrida + caso) para comparar a ojo (germen del LLM-as-judge). Flags `-c/--category`, `--case`, `--list`, `--overwrite`; el JSON es un **historial append-only** (cada corrida = un elemento del array) para correr de a un caso sin agotar tokens. Cada caso lleva `status` (`ok`/`degraded`/`error`): **`degraded`** = el LLM falló y el grafo cayó al fallback determinístico (salida que NO refleja al modelo), detectado capturando los errores de `orchestrator.graph` |
 
 ## División de trabajo
@@ -210,6 +210,7 @@ Coordinación crítica:
 
 > **Fuente de verdad de las correcciones pendientes: [docs/plan_correcciones.md](plan_correcciones.md)**
 > (revisión del 2026-09-15, fases F0–F4). Si esta lista lo contradice, manda el plan.
+> **Prioridad actual: [docs/plan_mvp.md](plan_mvp.md)** (qué entra al MVP y en qué orden).
 
 1. ~~Reemplazar el stub del Monitor por agente real~~ **✅ HECHO**
 2. ~~Implementar `agents/clinical.py` (Agente Clínico real) e integrar en `graph.py`~~ **✅ HECHO**

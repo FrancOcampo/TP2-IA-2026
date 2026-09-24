@@ -237,3 +237,7 @@ logs/*
 
 # graphify: grafo de conocimiento regenerable (graphify extract/update .)
 graphify-out/
+
+# Historial local de pacientes (SQLite, MVP): se regenera con data/load_history.py
+data/tp2.db
+data/tp2.db-*

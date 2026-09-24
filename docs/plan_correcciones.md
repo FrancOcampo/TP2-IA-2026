@@ -56,7 +56,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F2-05** | [EAS-16](https://linear.app/easymetricdev/issue/EAS-16) | `search_clinical_guidelines` sin parámetro de contexto | 🟡 Media | F2-06 | ⬜ |
 | **F2-06** | [EAS-17](https://linear.app/easymetricdev/issue/EAS-17) | Corpus ADA 2024 vacío (solo introducción) + ingesta no idempotente | 🟠 Alta | — | ⬜ |
 | **F2-07** | [EAS-18](https://linear.app/easymetricdev/issue/EAS-18) | Documento del paciente sin diagnósticos/comorbilidades; sesiones previas de ejemplo | 🟡 Media | F1-04 | ⬜ |
-| **F2-08** | [EAS-19](https://linear.app/easymetricdev/issue/EAS-19) | Conexiones MongoDB sin reutilizar / sin cerrar | 🟢 Baja | — | ⬜ |
+| **F2-08** | [EAS-19](https://linear.app/easymetricdev/issue/EAS-19) | Conexiones MongoDB sin reutilizar / sin cerrar | 🟢 Baja | — | ✅ (MVP-01) |
 | **F3-01** | [EAS-20](https://linear.app/easymetricdev/issue/EAS-20) | Orquestador con salida estructurada del LLM (+ nodo de aclaración) | 🟠 Alta | F1-02, F1-04 | ⬜ |
 | **F3-02** | [EAS-21](https://linear.app/easymetricdev/issue/EAS-21) | Loop de refinamiento real: suficiencia estructurada + pedido concreto al Monitor | 🟠 Alta | F1-05, F1-06 | ⬜ |
 | **F3-03** | [EAS-22](https://linear.app/easymetricdev/issue/EAS-22) | Flags del Monitor coherentes y notas del plan del LLM | 🟡 Media | F1-05 | ⬜ |
@@ -70,6 +70,8 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F4-04** | [EAS-30](https://linear.app/easymetricdev/issue/EAS-30) | Codificación UTF-8 de logs en consola Windows | 🟢 Baja | — | ⬜ |
 | **F4-05** | [EAS-31](https://linear.app/easymetricdev/issue/EAS-31) | Casos de evaluación nuevos | 🟡 Media | F1-*, F2-01 | ⬜ |
 | **F4-06** | [EAS-32](https://linear.app/easymetricdev/issue/EAS-32) | Sincronizar documentación y artículo | 🟡 Media | todo | ⬜ |
+
+**Prioridad actual:** el [plan MVP](plan_mvp.md) define qué ítems entran al MVP y en qué orden.
 
 **Orden sugerido:** F0 → F2-01 (cambia expectativas de muchos tests, conviene temprano) → F1-01…F1-06
 → F2-06 → resto de F2 → F3 → F4.
@@ -442,7 +444,9 @@ El wrapper solo recibe `query` ([clinical.py:59-66](../agents/clinical.py#L59));
 
 **Cambios.** Cliente perezoso a nivel de módulo (`functools.lru_cache` o singleton) con `close_client()` para los tests; `datetime.now(timezone.utc)`; eliminar `_mongo_available` si queda sin uso.
 
-**Aceptación:** [ ] sin `ResourceWarning`/`DeprecationWarning` de estos módulos en `pytest -W error::DeprecationWarning -m integration`.
+**Aceptación:** [x] resuelto por MVP-01 ([ADR-0005](adr/0005-historial-en-sqlite-local.md)): `mongo_tools.py` se reemplaza por `history_tools.py` + `HistoryStore`; el cliente Mongo es único por proceso (`get_store()` cacheado) y se usa `datetime.now(timezone.utc)`.
+
+> Nota general: desde MVP-01 las referencias a `tools/mongo_tools.py` y `data/load_mongo.py` de este plan corresponden a `tools/history_tools.py` y `data/load_history.py`.
 
 ---
 

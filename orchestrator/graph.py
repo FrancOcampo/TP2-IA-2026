@@ -267,7 +267,7 @@ def route_from_orchestrator(state: AgentState) -> str:
     - consulta nueva            → pipeline completo (Monitor → Clínico)
     """
     # TODO (Orquestador/A): la rama "save" hoy va directo a END (no persiste). Reemplazar por
-    # un nodo `save` que llame a tools/mongo_tools.update_patient_history (ya implementada) con
+    # un nodo `save` que llame a tools/history_tools.update_patient_history (ya implementada) con
     # el reporte, alertas y métricas de la sesión. Ver docs/estado_proyecto.md (pendiente).
     if state.get("awaiting_confirmation"):
         return "save"

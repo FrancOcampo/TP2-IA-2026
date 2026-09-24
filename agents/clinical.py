@@ -5,7 +5,7 @@
 # Implementación (contrato A+C):
 #   - Agente ReAct: el LLM (Groq llama-3.3-70b-versatile) interpreta los hallazgos del Monitor,
 #     consulta el historial del paciente en MongoDB y las guías clínicas vía RAG, y redacta el reporte.
-#   - MongoDB: tools/mongo_tools.py (implementación real).
+#   - Historial: tools/history_tools.py (SQLite local o MongoDB, ver tools/history_store.py).
 #   - RAG: rag/retriever.py + ChromaDB (implementación real).
 #   - El output es una actualización del AgentState.
 
@@ -26,7 +26,7 @@ from agents.prompts import (
     CLINICAL_SYSTEM_PROMPT,
 )
 from orchestrator.state import AgentState
-from tools.mongo_tools import compare_with_previous_sessions, get_patient_history
+from tools.history_tools import compare_with_previous_sessions, get_patient_history
 from rag.retriever import search_clinical_guidelines
 
 logger = logging.getLogger(__name__)
