@@ -130,7 +130,11 @@ class MonitorAnalysis(BaseModel):
     requires_rag: bool                    # hay alertas moderadas o severas
     requires_longitudinal_comparison: bool  # hay métricas que ameritan comparar con sesiones anteriores
     insufficient_data: dict[str, str] = Field(default_factory=dict)  # métrica → motivo
-    records_count: int = 0                # registros del EHR analizados
+    records_count: int = 0                # registros del EHR analizados (dentro de analysis_window)
+    # Ventana principal del análisis (D7): stats, alertas e insufficient_data la usan toda.
+    analysis_window: TimeRange = Field(default_factory=TimeRange)
+    # Stats pedidas por el LLM con otra ventana, sin mezclarse con las principales ("metric@ventana").
+    extra_windows: dict[str, MetricStats] = Field(default_factory=dict)
 
 
 # -------------------------------------------------------------------

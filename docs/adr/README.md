@@ -16,6 +16,7 @@ Complementa al [plan de correcciones](../plan_correcciones.md), que dice **qué*
 | [0006](0006-embeddings-locales-sin-ollama.md) | Embeddings locales en proceso por defecto y chunking con tamaño mínimo | Aceptado | 2026-09-24 | MVP-02 · F2-06 |
 | [0007](0007-reporte-y-respuesta-de-seguimiento-separados.md) | El reporte de la sesión y la respuesta de seguimiento viven en campos separados | Aceptado | 2026-09-24 | F1-03 / D3 · EAS-8 |
 | [0008](0008-guardado-explicito-de-sesion.md) | Guardado de sesión con señal explícita y nodo `save` que persiste | Aceptado | 2026-09-24 | F1-04 / D5 · EAS-9 |
+| [0009](0009-ventana-principal-del-monitor.md) | El Monitor analiza con una ventana principal y registra llamadas, no resultados | Aceptado | 2026-09-24 | F1-05 / D7 · EAS-10 |
 
 ## Plantilla
 

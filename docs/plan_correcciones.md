@@ -47,7 +47,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F1-02** | [EAS-7](https://linear.app/easymetricdev/issue/EAS-7) | Contaminación de estado al cambiar de paciente en el mismo thread | 🔴 Crítica | F0-01 | ✅ |
 | **F1-03** | [EAS-8](https://linear.app/easymetricdev/issue/EAS-8) | La respuesta de seguimiento sobrescribe el reporte | 🟠 Alta | F0-01 | ✅ |
 | **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ✅ |
-| **F1-05** | [EAS-10](https://linear.app/easymetricdev/issue/EAS-10) | Monitor mezcla ventanas temporales y duplica alertas | 🟠 Alta | F0-01 | ⬜ |
+| **F1-05** | [EAS-10](https://linear.app/easymetricdev/issue/EAS-10) | Monitor mezcla ventanas temporales y duplica alertas | 🟠 Alta | F0-01 | ✅ |
 | **F1-06** | [EAS-11](https://linear.app/easymetricdev/issue/EAS-11) | Suficiencia de información hardcodeada (P004) y por palabra clave | 🟠 Alta | F1-01 | ⬜ |
 | **F2-01** | [EAS-12](https://linear.app/easymetricdev/issue/EAS-12) | Umbrales diagnósticos usados como umbrales de control 🩺 | 🔴 Crítica | — | ⬜ |
 | **F2-02** | [EAS-13](https://linear.app/easymetricdev/issue/EAS-13) | Umbrales de presión arterial y variación de peso 🩺 | 🟡 Media | F2-01 | ⬜ |
@@ -262,8 +262,10 @@ chequear globalmente y aparecen alertas fuera de la ventana. Llamadas repetidas 
 5. `_monitor_fallback` delega en la misma función de ensamblado (hoy duplica la lógica en [graph.py:97-116](../orchestrator/graph.py#L97)).
 
 **Aceptación**
-- [ ] `test_monitor_no_duplica_alertas` pasa.
-- [ ] Test unitario de `_build_analysis`: LLM pidió `hba1c` con 3 meses → alertas de `glucose_fasting` completadas también con 3 meses.
+- [x] `test_monitor_no_duplica_alertas` y `test_monitor_respeta_ventana_elegida` pasan sin `xfail`.
+- [x] Test unitario de `_build_analysis`: LLM pidió `hba1c` con 3 meses → alertas de `glucose_fasting` completadas también con 3 meses (`tests/test_monitor_ensamblado.py`).
+
+**Decisión registrada:** [ADR-0009](adr/0009-ventana-principal-del-monitor.md). Diferencias con lo previsto: se deduplica por `(metric, date)` hasta que `Alert` tenga `side` (F2-03); `insufficient_data` y `records_count` pasan a evaluarse sobre la ventana; el template del Monitor ahora recibe la `query` (antes no llegaba al LLM).
 
 ---
 

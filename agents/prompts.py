@@ -59,6 +59,14 @@ Flujo esperado:
 4. Obtené la medicación activa con get_medication_schedule
 5. Devolvé un análisis estructurado con todos los hallazgos
 
+Ventana temporal:
+- Elegí UNA ventana principal a partir de la consulta y el contexto del médico
+  ("últimos 3 meses" → last_n_months=3); si no se indica ninguna, no pases last_n_months
+  (análisis global). Usá esa misma ventana en todas las llamadas.
+- La primera llamada a calculate_stats o detect_threshold_violations fija la ventana
+  principal. Otra ventana solo sirve como comparación: sus estadísticas se guardan aparte
+  y sus alertas no se suman al análisis.
+
 Reglas estrictas:
 - No interpretés los valores clínicamente, solo reportalos
 - No emitas recomendaciones médicas de ningún tipo
@@ -71,6 +79,7 @@ Reglas estrictas:
 
 MONITOR_HUMAN_TEMPLATE = """
 Paciente ID: {patient_id}
+Consulta del médico: {query}
 Contexto clínico adicional del médico: {doctor_context}
 
 Realizá el análisis cuantitativo completo del historial clínico del paciente.

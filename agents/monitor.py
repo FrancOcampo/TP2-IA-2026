@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass, field
+from datetime import date
 from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -41,6 +43,7 @@ from tools.patient_tools import (
     calculate_stats,
     get_medication_schedule,
     load_patient_data,
+    window_metrics,
 )
 from tools.threshold_tools import ADA_THRESHOLDS, detect_threshold_violations
 
@@ -206,6 +209,7 @@ def run_monitor_agent(state: AgentState) -> MonitorAnalysis:
     # Armar la secuencia inicial de mensajes
     human_msg = MONITOR_HUMAN_TEMPLATE.format(
         patient_id=patient_id,
+        query=query or "(sin consulta específica)",
         doctor_context=doctor_context or "(sin contexto adicional)",
     )
     messages = [
@@ -213,11 +217,8 @@ def run_monitor_agent(state: AgentState) -> MonitorAnalysis:
         HumanMessage(content=human_msg),              # patient_id + doctor_context
     ]
 
-    # Acumuladores para construir el fallback si el LLM no devuelve JSON parseaable
-    collected_stats: dict[str, MetricStats] = {}
-    collected_alerts: list[Alert] = []
-    collected_meds: list[Medication] = []
-    patient_loaded = False
+    # Lo que el LLM pidió y obtuvo; se ensambla de forma determinística al final
+    collected = CollectedResults()
 
     # Loop ReAct
     for step in range(_MAX_MONITOR_STEPS):
@@ -246,13 +247,7 @@ def run_monitor_agent(state: AgentState) -> MonitorAnalysis:
 
             messages.append(ToolMessage(content=result, tool_call_id=tool_id))
 
-            # Trackear resultados para el fallback
-            _track_tool_result(
-                tool_name, tool_args, result, patient_id,
-                collected_stats, collected_alerts, collected_meds,
-            )
-            if tool_name == "tool_load_patient_data":
-                patient_loaded = True
+            collected.track(tool_name, tool_args, result)
 
             logger.info(
                 "Monitor: tool=%s args=%s → %s",
@@ -265,113 +260,151 @@ def run_monitor_agent(state: AgentState) -> MonitorAnalysis:
     # Construir MonitorAnalysis con fallback programático
     # (El LLM razonó y ejecutó las tools; ahora ensamblamos los resultados
     # de forma determinística para no depender del parsing de la respuesta del LLM.)
-    return _build_analysis(patient_id, collected_stats, collected_alerts, collected_meds)
+    return _build_analysis(patient_id, collected)
 
 
-def _track_tool_result(
-    tool_name: str,
-    tool_args: dict,
-    result: str,
-    patient_id: str,
-    stats: dict[str, MetricStats],
-    alerts: list[Alert],
-    meds: list[Medication],
-) -> None:
-    """Registra los resultados de las tools en los acumuladores del fallback."""
-    try:
-        data = json.loads(result)
-    except (json.JSONDecodeError, TypeError):
-        return
-
-    if tool_name == "tool_calculate_stats" and isinstance(data, dict) and "error" not in data:
-        metric = data.get("metric", tool_args.get("metric", ""))
-        stats[metric] = MetricStats(
-            last_value=data["last_value"],
-            mean=data["mean"],
-            min_value=data["min_value"],
-            max_value=data["max_value"],
-            delta=data["delta"],
-            direction=data["direction"],
-        )
-    elif tool_name == "tool_detect_threshold_violations" and isinstance(data, list):
-        from datetime import date as date_type
-        for a in data:
-            alerts.append(Alert(
-                metric=a["metric"],
-                value=a["value"],
-                severity=a["severity"],
-                date=date_type.fromisoformat(a["date"]),
-                description=a["description"],
-            ))
-    elif tool_name == "tool_get_medication_schedule" and isinstance(data, list):
-        for m in data:
-            meds.append(Medication(name=m["name"], dose=m["dose"], frequency=m["frequency"]))
+def _timerange_from_args(tool_args: dict) -> TimeRange:
+    """Ventana pedida en una tool call (los wrappers solo exponen `last_n_months`)."""
+    n = tool_args.get("last_n_months")
+    return TimeRange(last_n_months=n) if n else TimeRange()
 
 
-def _build_analysis(
-    patient_id: str,
-    collected_stats: dict[str, MetricStats],
-    collected_alerts: list[Alert],
-    collected_meds: list[Medication],
-) -> MonitorAnalysis:
+def window_key(timerange: TimeRange) -> str:
+    """Clave legible y estable de una ventana: 'global', '3m' o 'AAAA-MM-DD..AAAA-MM-DD'."""
+    if timerange.is_global:
+        return "global"
+    if timerange.last_n_months is not None:
+        return f"{timerange.last_n_months}m"
+    return f"{timerange.start or ''}..{timerange.end or ''}"
+
+
+@dataclass
+class CollectedResults:
     """
-    Construye el MonitorAnalysis a partir de los resultados acumulados de las tools.
-
-    Si el LLM no llamó a una tool para alguna métrica, la ejecutamos acá como fallback.
-    Nunca se inventan valores (ADR-0003): una métrica sin registros queda con stats `None`, y
-    las que tienen menos de `_MIN_RECORDS_FOR_TREND` registros se declaran en `insufficient_data`.
-    Requiere que el paciente tenga datos en el EHR (lo verifica el nodo Monitor antes).
+    Registro de las llamadas analíticas del LLM (F1-05). Se registran las LLAMADAS
+    (métrica + ventana), no se deducen de los resultados: una detección sin alertas
+    también cuenta como hecha y no se repite.
     """
-    metrics_history = load_patient_data(patient_id)
+    analysis_window: Optional[TimeRange] = None  # ventana de la primera llamada analítica (D7)
+    stats: dict[tuple[str, str], MetricStats] = field(default_factory=dict)  # (métrica, ventana)
+    checked: set[tuple[str, str]] = field(default_factory=set)             # detecciones hechas
+    alerts: dict[tuple[str, str], list[Alert]] = field(default_factory=dict)
+    meds: list[Medication] = field(default_factory=list)
+
+    def track(self, tool_name: str, tool_args: dict, result: str) -> None:
+        try:
+            data = json.loads(result)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if isinstance(data, dict) and "error" in data:
+            return
+
+        if tool_name == "tool_get_medication_schedule" and isinstance(data, list):
+            self.meds = [Medication(**m) for m in data]
+            return
+        if tool_name not in ("tool_calculate_stats", "tool_detect_threshold_violations"):
+            return
+
+        timerange = _timerange_from_args(tool_args)
+        if self.analysis_window is None:
+            self.analysis_window = timerange
+        key = (tool_args.get("metric", ""), window_key(timerange))
+
+        if tool_name == "tool_calculate_stats" and isinstance(data, dict):
+            self.stats[key] = MetricStats(**{k: data[k] for k in MetricStats.model_fields})
+        elif isinstance(data, list):
+            self.checked.add(key)
+            self.alerts[key] = [
+                Alert(metric=a["metric"], value=a["value"], severity=a["severity"],
+                      date=date.fromisoformat(a["date"]), description=a["description"])
+                for a in data
+            ]
+
+
+def _dedupe_alerts(alerts: list[Alert]) -> list[Alert]:
+    """
+    Una observación genera a lo sumo una alerta: clave (métrica, fecha). Un registro no puede
+    violar la banda alta y la baja a la vez, así que la fecha identifica al lado.
+    TODO(F2-03): usar (metric, date, side) cuando Alert tenga `side`.
+    """
+    seen: set[tuple[str, date]] = set()
+    unique = []
+    for a in alerts:
+        if (a.metric, a.date) not in seen:
+            seen.add((a.metric, a.date))
+            unique.append(a)
+    return sorted(unique, key=lambda a: (a.date, a.metric))
+
+
+def _build_analysis(patient_id: str, collected: Optional[CollectedResults] = None) -> MonitorAnalysis:
+    """
+    Ensambla el MonitorAnalysis a partir de lo que pidió el LLM (o de nada, en el fallback).
+
+    Una sola ventana principal (D7): la de la primera llamada analítica del LLM, o global.
+    Lo que el LLM no pidió se completa con esa MISMA ventana. Las stats pedidas con otra
+    ventana quedan en `extra_windows`; sus alertas no se mezclan con las principales.
+
+    Nunca se inventan valores (ADR-0003): una métrica sin registros en la ventana queda con
+    stats `None`, y las que tienen menos de `_MIN_RECORDS_FOR_TREND` registros se declaran en
+    `insufficient_data`. Requiere que el paciente tenga datos en el EHR (lo verifica el nodo).
+    """
+    collected = collected or CollectedResults()
+    window = collected.analysis_window or TimeRange()
+    main_key = window_key(window)
+    windowed = window_metrics(load_patient_data(patient_id), window)
+
+    stats: dict[str, MetricStats] = {}
     insufficient_data: dict[str, str] = {}
-
     for metric in SERIES_METRICS:
-        n_records = len(getattr(metrics_history, metric))
+        n_records = len(getattr(windowed, metric))
         if n_records < _MIN_RECORDS_FOR_TREND:
             insufficient_data[metric] = (
-                f"{n_records} registro(s); se requieren al menos {_MIN_RECORDS_FOR_TREND} "
-                "para evaluar la evolución"
+                f"{n_records} registro(s) en la ventana {main_key}; se requieren al menos "
+                f"{_MIN_RECORDS_FOR_TREND} para evaluar la evolución"
             )
-        if metric not in collected_stats:
-            try:
-                collected_stats[metric] = calculate_stats(patient_id, metric)
-            except ValueError:
-                # Sin registros para la métrica: se deja sin stats en lugar de inventar valores
-                insufficient_data[metric] = "sin registros"
+        if (metric, main_key) in collected.stats:
+            stats[metric] = collected.stats[(metric, main_key)]
+            continue
+        try:
+            stats[metric] = calculate_stats(patient_id, metric, window)
+        except ValueError:
+            # Sin registros para la métrica: se deja sin stats en lugar de inventar valores
+            insufficient_data[metric] = f"sin registros en la ventana {main_key}"
 
-    # Asegurar que se chequearon violaciones para las métricas con umbral
-    checked_alert_metrics = {a.metric for a in collected_alerts}
+    alerts: list[Alert] = []
     for metric in ADA_THRESHOLDS:
-        if metric not in checked_alert_metrics:
-            try:
-                new_alerts = detect_threshold_violations(patient_id, metric)
-                collected_alerts.extend(new_alerts)
-            except (ValueError, FileNotFoundError):
-                pass
+        if (metric, main_key) in collected.checked:
+            alerts.extend(collected.alerts[(metric, main_key)])
+        else:
+            alerts.extend(detect_threshold_violations(patient_id, metric, window))
+    discarded = sum(len(v) for (m, k), v in collected.alerts.items() if k != main_key)
+    if discarded:
+        logger.info("Monitor: %d alerta(s) de ventanas secundarias no se mezclan con la ventana %s",
+                    discarded, main_key)
+    alerts = _dedupe_alerts(alerts)
 
-    # Asegurar que se cargó la medicación
-    if not collected_meds:
-        collected_meds = get_medication_schedule(patient_id)
-
-    # Determinar flags
-    has_moderate_or_severe = any(
-        a.severity in ("moderada", "severa") for a in collected_alerts
-    )
+    extra_windows = {
+        f"{metric}@{key}": s for (metric, key), s in collected.stats.items() if key != main_key
+    }
+    meds = collected.meds or get_medication_schedule(patient_id)
+    has_moderate_or_severe = any(a.severity in ("moderada", "severa") for a in alerts)
 
     return MonitorAnalysis(
-        glucose_fasting_stats=collected_stats.get("glucose_fasting"),
-        hba1c_stats=collected_stats.get("hba1c"),
-        glucose_postprandial_stats=collected_stats.get("glucose_postprandial"),
-        weight_stats=collected_stats.get("weight"),
+        glucose_fasting_stats=stats.get("glucose_fasting"),
+        hba1c_stats=stats.get("hba1c"),
+        glucose_postprandial_stats=stats.get("glucose_postprandial"),
+        weight_stats=stats.get("weight"),
         blood_pressure_stats=BloodPressureStats(
-            systolic=collected_stats.get("blood_pressure_systolic"),
-            diastolic=collected_stats.get("blood_pressure_diastolic"),
+            systolic=stats.get("blood_pressure_systolic"),
+            diastolic=stats.get("blood_pressure_diastolic"),
         ),
         cgm_metrics=None,  # CGM fuera de alcance
-        alerts=collected_alerts,
-        medication=collected_meds,
+        alerts=alerts,
+        medication=meds,
         requires_rag=has_moderate_or_severe,
-        requires_longitudinal_comparison=has_moderate_or_severe,
+        requires_longitudinal_comparison=has_moderate_or_severe,  # TODO(F3-03): criterio propio
         insufficient_data=insufficient_data,
-        records_count=len(metrics_history.dates),
+        records_count=len(windowed.dates),
+        analysis_window=window,
+        extra_windows=extra_windows,
     )
