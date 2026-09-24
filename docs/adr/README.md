@@ -14,6 +14,7 @@ Complementa al [plan de correcciones](../plan_correcciones.md), que dice **qué*
 | [0004](0004-paciente-activo-y-aislamiento-de-estado.md) | El Orquestador recuerda el paciente activo y aísla el estado al cambiar | Aceptado | 2026-09-24 | F1-02 / D4 · EAS-7 |
 | [0005](0005-historial-en-sqlite-local.md) | Historial de pacientes en SQLite local, detrás de una interfaz de almacén | Aceptado | 2026-09-24 | MVP-01 · F2-08 |
 | [0006](0006-embeddings-locales-sin-ollama.md) | Embeddings locales en proceso por defecto y chunking con tamaño mínimo | Aceptado | 2026-09-24 | MVP-02 · F2-06 |
+| [0007](0007-reporte-y-respuesta-de-seguimiento-separados.md) | El reporte de la sesión y la respuesta de seguimiento viven en campos separados | Aceptado | 2026-09-24 | F1-03 / D3 · EAS-8 |
 
 ## Plantilla
 

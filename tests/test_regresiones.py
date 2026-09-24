@@ -155,7 +155,6 @@ def test_reiniciar_vuelve_a_correr_el_pipeline(app):
 # F1-03 · La respuesta de seguimiento sobrescribe el reporte
 # -------------------------------------------------------------------
 
-@_xfail("F1-03")
 def test_seguimiento_no_pisa_reporte(app):
     reporte = _analizar(app, "P002", "t-followup")["report"]
     out = app.invoke({"query": "¿Qué significa la HbA1c?"}, _cfg("t-followup"))

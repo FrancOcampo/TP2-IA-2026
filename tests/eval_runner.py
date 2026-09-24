@@ -115,9 +115,8 @@ def _run_case(case: dict) -> dict:
     Corre setup + input sobre un thread aislado y devuelve la salida obtenida más
     metadatos del caso (reporte final, nº de alertas, duración, status y error si lo hubo).
 
-    El campo `report` del estado contiene la salida del Clínico tanto en modo reporte
-    como en modo seguimiento (en seguimiento se sobrescribe con la respuesta), así que
-    sirve como "salida obtenida" en ambos tipos de caso.
+    La "salida obtenida" es `followup_answer` si el último mensaje fue un seguimiento
+    (`is_followup`) y `report` si no: el seguimiento nunca pisa el reporte (D3, F1-03).
 
     `status`: "ok" si corrió todo con LLM; "degraded" si algún nodo cayó al fallback
     determinístico (el LLM falló: rate limit, 413, timeout…) y la salida NO refleja al modelo.
@@ -144,7 +143,8 @@ def _run_case(case: dict) -> dict:
     analysis = (final or {}).get("analysis")
     degraded = bool(capture.messages)
     return {
-        "obtained": (final or {}).get("report") or "(sin reporte)",
+        "obtained": (final or {}).get("followup_answer" if (final or {}).get("is_followup") else "report")
+                    or "(sin respuesta)",
         "alerts_count": len(analysis.alerts) if analysis else None,
         "duration_s": duration,
         "status": "degraded" if degraded else "ok",

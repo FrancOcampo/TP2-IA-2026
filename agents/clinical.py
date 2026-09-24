@@ -177,9 +177,19 @@ def run_clinical_agent(state: AgentState) -> dict[str, Any]:
     else:
         logger.warning("Clínico: alcanzó el límite de %d pasos", _MAX_CLINICAL_STEPS)
 
-    # Determinar si la información es suficiente analizando la respuesta del LLM
     final_content = extract_content(response)
 
+    # Modo seguimiento: la respuesta va a `followup_answer` y el reporte de la sesión no se
+    # toca (D3). No hay evaluación de suficiencia: el refinamiento es solo del modo reporte.
+    if is_followup and existing_report:
+        return {
+            "followup_answer": final_content,
+            "information_sufficient": True,
+            "conversation": [{"role": "assistant", "content": final_content}],
+        }
+
+    # Determinar si la información es suficiente analizando la respuesta del LLM
+    # TODO(F1-06/F3-02): reemplazar la detección por palabra clave por ClinicalAssessment.
     information_sufficient = True
     if "information_sufficient = false" in final_content.lower() or "insuficiente" in final_content.lower():
         information_sufficient = False
