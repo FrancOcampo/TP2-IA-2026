@@ -41,6 +41,7 @@ código. Ver también [docs/logs.md](docs/logs.md) (cómo leer las trazas/observ
 
 ```bash
 uv sync                 # instalar/actualizar entorno
+uv run python main.py   # bootstrap (historial SQLite + índice RAG si faltan) y UI en :7860
 uv run pytest           # correr la suite (config en pyproject: pythonpath=["."], testpaths=["tests"])
 uv lock                 # regenerar lockfile tras cambiar dependencias
 ```

@@ -1,7 +1,7 @@
 [project]
 name = "tp2-ia-2026"
 version = "0.1.0"
-description = "Add your description here"
+description = "Sistema multiagente de soporte a la decisión clínica para seguimiento de diabetes tipo 2"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

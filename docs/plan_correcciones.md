@@ -66,8 +66,8 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F3-07** | [EAS-26](https://linear.app/easymetricdev/issue/EAS-26) | Campo "Orientación del análisis" en la UI | 🟢 Baja | F3-01 | ⬜ |
 | **F4-01** | [EAS-27](https://linear.app/easymetricdev/issue/EAS-27) | Modelo por defecto alineado con el artículo | 🟢 Baja | — | ✅ (MVP-03) |
 | **F4-02** | [EAS-28](https://linear.app/easymetricdev/issue/EAS-28) | Serialización de modelos Pydantic en el checkpointer | 🟡 Media | — | ⬜ |
-| **F4-03** | [EAS-29](https://linear.app/easymetricdev/issue/EAS-29) | Limpieza de dependencias y `main.py` | 🟢 Baja | — | ⬜ |
-| **F4-04** | [EAS-30](https://linear.app/easymetricdev/issue/EAS-30) | Codificación UTF-8 de logs en consola Windows | 🟢 Baja | — | ⬜ |
+| **F4-03** | [EAS-29](https://linear.app/easymetricdev/issue/EAS-29) | Limpieza de dependencias y `main.py` | 🟢 Baja | — | 🟨 (`main.py` y `description` en MVP-04; falta limpiar dependencias) |
+| **F4-04** | [EAS-30](https://linear.app/easymetricdev/issue/EAS-30) | Codificación UTF-8 de logs en consola Windows | 🟢 Baja | — | ✅ (MVP-04) |
 | **F4-05** | [EAS-31](https://linear.app/easymetricdev/issue/EAS-31) | Casos de evaluación nuevos | 🟡 Media | F1-*, F2-01 | ⬜ |
 | **F4-06** | [EAS-32](https://linear.app/easymetricdev/issue/EAS-32) | Sincronizar documentación y artículo | 🟡 Media | todo | ⬜ |
 
@@ -615,7 +615,7 @@ Al reanudar un thread, LangGraph advierte: *"Deserializing unregistered type orc
 
 ### F4-04 · Codificación UTF-8 de logs en consola Windows
 En la consola de Windows los logs salen como `determin�stico`. **Cambio:** `sys.stdout.reconfigure(encoding="utf-8")` en `setup_logging()` (como ya hace `load_mongo.py`).
-- [ ] Aceptación: los acentos se ven bien en PowerShell.
+- [x] Aceptación: los acentos se ven bien en PowerShell (`setup_logging()` y `main.py` reconfiguran stdout/stderr a UTF-8).
 
 ### F4-05 · Casos de evaluación nuevos
 Agregar a `tests/cases/`:
