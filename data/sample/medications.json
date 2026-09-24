@@ -11,5 +11,9 @@
   ],
   "P004": [
     { "name": "Metformina", "dose": "850mg", "frequency": "cada 24h" }
+  ],
+  "P005": [
+    { "name": "Metformina", "dose": "1000mg", "frequency": "cada 12h" },
+    { "name": "Insulina glargina", "dose": "20 UI", "frequency": "cada 24h" }
   ]
 }

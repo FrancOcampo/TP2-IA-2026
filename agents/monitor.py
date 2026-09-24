@@ -45,7 +45,7 @@ from tools.patient_tools import (
     load_patient_data,
     window_metrics,
 )
-from tools.threshold_tools import ADA_THRESHOLDS, detect_threshold_violations
+from tools.threshold_tools import THRESHOLDS, detect_threshold_violations
 
 logger = logging.getLogger(__name__)
 
@@ -118,9 +118,9 @@ def tool_calculate_stats(patient_id: str, metric: str, last_n_months: Optional[i
 
 @tool
 def tool_detect_threshold_violations(patient_id: str, metric: str, last_n_months: Optional[int] = None) -> str:
-    """Detecta violaciones de umbrales clínicos ADA para una métrica.
+    """Detecta valores fuera de las metas de control de DM2 para una métrica.
 
-    Compara cada valor contra los umbrales de la ADA y devuelve las alertas
+    Compara cada valor contra las metas de control (no criterios diagnósticos) y devuelve las alertas
     (hiperglucemia e hipoglucemia) con fecha, valor, severidad y descripción.
     Métricas sin umbral definido (weight, blood_pressure_*) devuelven lista vacía.
 
@@ -372,7 +372,7 @@ def _build_analysis(patient_id: str, collected: Optional[CollectedResults] = Non
             insufficient_data[metric] = f"sin registros en la ventana {main_key}"
 
     alerts: list[Alert] = []
-    for metric in ADA_THRESHOLDS:
+    for metric in THRESHOLDS:
         if (metric, main_key) in collected.checked:
             alerts.extend(collected.alerts[(metric, main_key)])
         else:

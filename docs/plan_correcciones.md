@@ -49,7 +49,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ✅ |
 | **F1-05** | [EAS-10](https://linear.app/easymetricdev/issue/EAS-10) | Monitor mezcla ventanas temporales y duplica alertas | 🟠 Alta | F0-01 | ✅ |
 | **F1-06** | [EAS-11](https://linear.app/easymetricdev/issue/EAS-11) | Suficiencia de información hardcodeada (P004) y por palabra clave | 🟠 Alta | F1-01 | ✅ |
-| **F2-01** | [EAS-12](https://linear.app/easymetricdev/issue/EAS-12) | Umbrales diagnósticos usados como umbrales de control 🩺 | 🔴 Crítica | — | ⬜ |
+| **F2-01** | [EAS-12](https://linear.app/easymetricdev/issue/EAS-12) | Umbrales diagnósticos usados como umbrales de control 🩺 | 🔴 Crítica | — | ✅ implementado · 🩺 validación pendiente |
 | **F2-02** | [EAS-13](https://linear.app/easymetricdev/issue/EAS-13) | Umbrales de presión arterial y variación de peso 🩺 | 🟡 Media | F2-01 | ⬜ |
 | **F2-03** | [EAS-14](https://linear.app/easymetricdev/issue/EAS-14) | Alertas trazables (umbral explícito) y agrupadas por episodio | 🟡 Media | F2-01 | ⬜ |
 | **F2-04** | [EAS-15](https://linear.app/easymetricdev/issue/EAS-15) | `compare_with_previous_sessions` no compara ni clasifica | 🟠 Alta | F1-04 | ⬜ |
@@ -334,9 +334,11 @@ P003 (HbA1c 6.1, buen control) produce 12 alertas "moderadas"; P002 produce 34.
 | P005 | ≥ 1 severa hiper y ≥ 1 severa hipo |
 
 **Aceptación**
-- [ ] Tests de `test_monitor_tools.py` actualizados (`test_detect_limites_exactos_ada`, `test_detect_severidades_moderada_y_severa`, `test_threshold_tendencia_ascendente_tiene_severas` → pasa a P005).
-- [ ] Tabla de pacientes del README actualizada.
+- [x] Tests de `test_monitor_tools.py` actualizados (límites exactos parametrizados por banda y comparador, P002 = 17 moderadas, severas en P005).
+- [x] Tabla de pacientes del README actualizada.
 - [ ] El equipo validó la tabla 🩺 (dejar constancia en esta sección: fecha + quién).
+
+**Decisión registrada:** [ADR-0011](adr/0011-metas-de-control-dm2.md). Las expectativas con los datos actuales se verificaron exactamente como en la tabla de arriba. `load_history.py` ya derivaba los pacientes de los CSV (MVP-01), así que P005 entra solo.
 
 ---
 

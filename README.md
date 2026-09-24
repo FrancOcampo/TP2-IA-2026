@@ -15,7 +15,7 @@ reporte estructurado consultando guías clínicas (RAG). **No emite diagnóstico
 | # | Funcionalidad | Descripción |
 |---|---|---|
 | 1 | **Pipeline multi-agente** | Orquestador enruta la consulta → Monitor (análisis) → Clínico (reporte), con loop de refinamiento. Orquestado con LangGraph. |
-| 2 | **Análisis cuantitativo determinístico** | Estadísticas por métrica (último, media, mín, máx, Δ, dirección) y detección de umbrales ADA: hiper **e** hipoglucemia. |
+| 2 | **Análisis cuantitativo determinístico** | Estadísticas por métrica (último, media, mín, máx, Δ, dirección) y detección de valores fuera de las **metas de control de DM2** (no criterios diagnósticos): hiper **e** hipoglucemia. |
 | 3 | **RAG sobre guías clínicas** | El agente Clínico fundamenta el reporte con fragmentos de guías (ADA / SAD / Guía Nacional) recuperados de ChromaDB. |
 | 4 | **Historial de pacientes** | Lectura del EHR (Electronic Health Record) y comparación entre sesiones guardadas (SQLite local; MongoDB opcional). |
 | 5 | **Interfaz web (Gradio)** | Pestaña *Consulta clínica* (perfil del paciente, análisis, reporte, alertas, tendencias, chat de seguimiento) y *Observabilidad (dev)*. |
@@ -79,9 +79,10 @@ Cada paciente del fixture ejercita un caso distinto:
 | Paciente | Caso | Comportamiento esperado |
 |---|---|---|
 | **P001** | Controlado | Reporte **sin alertas** (happy path). |
-| **P002** | Tendencia ascendente | Alertas **moderadas/severas** y dirección `subiendo` en las métricas. |
-| **P003** | Episodio de hipoglucemia | **Alerta de hipoglucemia moderada** (un mes con glucosa en ayunas = 55 mg/dL; el `mín` lo expone aunque la media lo diluya). |
-| **P004** | Datos insuficientes | Una sola fila → dispara la rama de información insuficiente. |
+| **P002** | Tendencia ascendente | **17 alertas moderadas** en el segundo semestre (ayunas > 130, HbA1c ≥ 7 %, postprandial ≥ 180) y dirección `subiendo`. |
+| **P003** | Episodio de hipoglucemia | **1 alerta de hipoglucemia moderada** (un mes con glucosa en ayunas = 55 mg/dL; el `mín` lo expone aunque la media lo diluya). HbA1c 6.1 % es buen control. |
+| **P004** | Datos insuficientes | Una sola fila → el reporte explicita que no hay datos suficientes para evaluar la evolución. |
+| **P005** | Descompensación severa | Alertas **severas**: HbA1c > 9 %, ayunas > 300 mg/dL y una hipoglucemia < 54 mg/dL. |
 
 El **chat de seguimiento** responde preguntas sobre el reporte ya generado (van directo al Clínico).
 
@@ -109,7 +110,7 @@ orchestrator/   state.py (estado + modelos) · graph.py (grafo LangGraph) · rou
 agents/         prompts.py · monitor.py (ReAct) · clinical.py (ReAct)
 tools/          patient_tools.py · threshold_tools.py · history_store.py · history_tools.py · rag_tools.py
 rag/            config.py (embeddings) · ingest.py (indexa en ChromaDB) · retriever.py (búsqueda)
-data/           generate_patients.py · load_history.py · guias/ · sample/ (fixture P001-P004)
+data/           generate_patients.py · load_history.py · guias/ · sample/ (fixture P001-P005)
 interface/      app.py (UI Gradio) · components.py (render) · logging_config.py (logs)
 tests/          test_graph.py · test_monitor_tools.py · test_clinico_tools.py · test_history_store.py · eval_runner.py · cases/ · ver docs/tests.md
 docs/           definición conceptual, arquitectura (CLAUDE.md), interfaz, logs

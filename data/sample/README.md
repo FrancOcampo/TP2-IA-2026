@@ -32,14 +32,15 @@ Una fila por mes. Columnas — mapean 1:1 a `PatientMetrics` en
 | `P001` | **Controlado** | Sin violaciones de umbral → happy path "sin alertas". |
 | `P002` | **Tendencia ascendente** | Las 3 métricas suben de `alerta` a `crítico` → alertas moderadas/severas + `direction = "subiendo"`. |
 | `P003` | **Episodio de hipoglucemia** | HbA1c en banda `alerta`; un mes con glucosa en ayunas = 55 mg/dL → **alerta de hipoglucemia moderada** (`min_value` lo expone aunque la media lo diluya). |
-| `P004` | **Datos insuficientes** | Una sola fila → dispara la rama `information_sufficient = False`. |
+| `P004` | **Datos insuficientes** | Una sola fila → las 6 métricas en `insufficient_data`; el reporte explicita la limitación. |
+| `P005` | **Descompensación severa** | HbA1c 9.2 → 10.4, ayunas > 300 y una hipoglucemia de 48 mg/dL (tras iniciar insulina) → alertas **severas** en ambos lados. |
 
 ## Notas sobre los umbrales (importante)
 
-- La tabla ADA de §2.6 de la def. conceptual es **diagnóstica** (`HbA1c < 5.7` normal,
-  `5.7–6.4` alerta, `≥ 6.5` crítico). Por eso `P001` ("controlado, sin alertas") tiene
-  HbA1c sub-diagnóstica (< 5.7). Umbrales de **objetivo de control** para diabéticos ya
-  diagnosticados (p. ej. HbA1c < 7%) son una refinación futura a coordinar con A.
+- Las alertas se evalúan contra **metas de control de DM2** (`DM2_CONTROL_THRESHOLDS` en
+  `tools/threshold_tools.py`, [ADR-0011](../../docs/adr/0011-metas-de-control-dm2.md)), no contra los
+  criterios diagnósticos (que quedan como `ADA_DIAGNOSTIC_THRESHOLDS`, sin uso). Alertas esperadas:
+  P001 0 · P002 17 moderadas · P003 1 (hipoglucemia) · P004 0 · P005 severas hiper e hipo.
 - `detect_threshold_violations` cubre **hiper e hipoglucemia**: bandas altas (alerta/crítico)
   y bandas bajas (hipoglucemia `< 70` moderada, `< 54` severa) para las glucemias. Por eso el
   episodio de 55 mg/dL de `P003` se reporta como alerta de hipoglucemia.
