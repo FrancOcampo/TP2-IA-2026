@@ -138,8 +138,16 @@ def follow_up(message: str, history: list, thread_id: str):
         return history, ""
 
     try:
+        before = langgraph_app.get_state(_config(thread_id)).values.get("active_patient_id")
         out = langgraph_app.invoke({"query": message}, _config(thread_id))
         reply = _last_assistant(out.get("conversation", []))
+        after = out.get("active_patient_id")
+        if before and after and after != before:
+            # El grafo cambió de paciente (ADR-0004), pero los paneles no se actualizan desde el chat.
+            reply += (
+                f"\n\n⚠️ **El análisis cambió de {before} a {after}.** Los paneles de reporte, alertas "
+                f"y tendencias siguen mostrando a {before}: seleccioná {after} y usá **Analizar paciente**."
+            )
     except Exception as e:
         reply = f"⚠️ Error: {e}"
 

@@ -60,7 +60,7 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 
 | ID | Título | Estado |
 |---|---|---|
-| **MVP-05** | Smoke test e2e determinístico (base SQLite temporal): analizar → seguir → guardar → re-analizar ve la sesión | ⬜ |
+| **MVP-05** | Smoke test e2e determinístico (base SQLite temporal): analizar → seguir → guardar → re-analizar ve la sesión | ✅ (`tests/test_smoke_mvp.py`) |
 | — | Corrida del `eval_runner` con LLM real, sin casos `error` | ⬜ |
 | — | README con el camino de 3 comandos | ✅ |
 
