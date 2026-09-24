@@ -598,6 +598,10 @@ def build_demo() -> gr.Blocks:
 demo = build_demo()
 
 
+def launch(**kwargs) -> None:
+    """Lanza la UI. En Gradio 6 css y theme se pasan a launch() (ya no al constructor de Blocks)."""
+    demo.launch(theme=_THEME, css=_APP_CSS, **kwargs)
+
+
 if __name__ == "__main__":
-    # En Gradio 6 css y theme se pasan a launch() (ya no al constructor de Blocks).
-    demo.launch(theme=_THEME, css=_APP_CSS)
+    launch()
