@@ -25,6 +25,10 @@ Una fila por mes. Columnas — mapean 1:1 a `PatientMetrics` en
 
 `medications.json` mapea `patient_id → list[Medication]` (`name`, `dose`, `frequency`).
 
+`patients_profile.json` tiene el perfil sintético de cada paciente (demografía, diagnósticos,
+comorbilidades) y las **sesiones semilla** de P002 y P003 para demostrar la comparación longitudinal
+([ADR-0012](../../docs/adr/0012-perfil-del-paciente-y-sesiones-semilla.md)). Lo carga `data/load_history.py`.
+
 ## Perfiles incluidos
 
 | ID | Perfil | Qué ejercita |

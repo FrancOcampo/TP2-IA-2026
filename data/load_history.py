@@ -38,30 +38,61 @@ def _load_medications() -> dict[str, list[dict]]:
         return json.load(f)
 
 
-def build_patient_doc(patient_id: str, metrics: list[dict], medications: list[dict]) -> dict:
+def _load_profiles() -> dict[str, dict]:
+    path = SAMPLE_DIR / "patients_profile.json"
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def build_patient_doc(
+    patient_id: str, metrics: list[dict], medications: list[dict], profile: dict | None = None,
+) -> dict:
     """
-    Schema del documento de paciente (igual en SQLite y MongoDB).
+    Schema del documento de paciente (igual en SQLite y MongoDB; plan F2-07).
 
     {
       patient_id: str,
+      demographics: { age, sex },
+      diagnoses: [ { code, label, since } ],
+      comorbidities: [ str ],
       metrics_history: [ { date, glucose_fasting, hba1c, glucose_postprandial,
                            weight, blood_pressure_systolic, blood_pressure_diastolic } ],
-      medications: [ { name, dose, frequency } ],
-      sessions: [ ... ]   # las agrega update_patient_history(); la carga no las toca
+      medications: [ { name, dose, frequency } ],   # medicación de base
+      sessions: [ ... ]   # update_patient_history() + sesiones semilla; la carga del perfil no las toca
     }
     """
-    return {"patient_id": patient_id, "metrics_history": metrics, "medications": medications}
+    profile = profile or {}
+    return {
+        "patient_id": patient_id,
+        "demographics": profile.get("demographics", {}),
+        "diagnoses": profile.get("diagnoses", []),
+        "comorbidities": profile.get("comorbidities", []),
+        "metrics_history": metrics,
+        "medications": medications,
+    }
 
 
 def load_all(store: HistoryStore, verbose: bool = True) -> int:
+    """
+    Carga perfiles y sesiones semilla (`patients_profile.json`). Idempotente: el perfil se
+    reemplaza, las sesiones semilla tienen id fijo y las guardadas por el médico se conservan.
+    """
     medications_map = _load_medications()
+    profiles = _load_profiles()
     ids = patient_ids()
     for pid in ids:
         metrics = _load_csv(pid)
         meds = medications_map.get(pid, [])
-        store.upsert_patient(build_patient_doc(pid, metrics, meds))
+        profile = profiles.get(pid, {})
+        store.upsert_patient(build_patient_doc(pid, metrics, meds, profile))
+        seeds = profile.get("sessions", [])
+        for session in seeds:
+            store.add_session(pid, session)
         if verbose:
-            print(f"  {pid} — {len(metrics)} registro(s), {len(meds)} medicamento(s)")
+            print(f"  {pid} — {len(metrics)} registro(s), {len(meds)} medicamento(s), "
+                  f"{len(seeds)} sesión(es) semilla")
     return len(ids)
 
 

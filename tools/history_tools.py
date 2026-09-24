@@ -31,20 +31,19 @@ def get_patient_history(patient_id: str) -> dict:
     Usado por el Agente Clínico para contexto longitudinal: comparaciones entre
     consultas, evolución del tratamiento, etc.
 
-    Si el almacén no está disponible, devuelve un dict sin sesiones indicando que no
-    hay historial (el agente sigue funcionando sin datos longitudinales).
-
-    TODO(F2-07): devolver {"found": False, ...} en vez de lanzar para un paciente inexistente.
+    Nunca lanza (F2-07): un paciente inexistente devuelve `found: False` y un almacén caído
+    `found: False` + `_history_unavailable`, ambos sin sesiones. Así la tool no tumba el loop
+    ReAct del Clínico y el agente sigue sin datos longitudinales.
     """
     try:
         doc = get_store().get_patient(patient_id)
     except Exception as e:
         logger.warning("Historial no disponible, devolviendo historial vacío: %s", e)
-        return {"patient_id": patient_id, "sessions": [], "_history_unavailable": True}
+        return {"patient_id": patient_id, "found": False, "sessions": [], "_history_unavailable": True}
 
     if doc is None:
-        raise ValueError(f"Paciente '{patient_id}' no encontrado")
-    return doc
+        return {"patient_id": patient_id, "found": False, "sessions": []}
+    return {**doc, "found": True}
 
 
 # -------------------------------------------------------------------

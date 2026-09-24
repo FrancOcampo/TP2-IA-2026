@@ -40,7 +40,10 @@ class HistoryStore(Protocol):
         """Crea o reemplaza el perfil del paciente. No borra sus sesiones."""
 
     def add_session(self, patient_id: str, session: dict) -> None:
-        """Agrega una sesión al paciente. Lanza KeyError si el paciente no existe."""
+        """
+        Agrega una sesión al paciente. Idempotente por `session_id` (volver a agregar la misma
+        sesión no la duplica). Lanza KeyError si el paciente no existe.
+        """
 
     def list_patient_ids(self) -> list[str]:
         """Ids de todos los pacientes cargados, ordenados."""
@@ -108,14 +111,17 @@ class SQLiteHistoryStore:
 
     def add_session(self, patient_id: str, session: dict) -> None:
         with self._lock, self._conn:
-            try:
-                self._conn.execute(
-                    "INSERT INTO sessions (session_id, patient_id, saved_at, data) VALUES (?, ?, ?, ?)",
-                    (session["session_id"], patient_id, session["saved_at"],
-                     json.dumps(session, ensure_ascii=False)),
-                )
-            except sqlite3.IntegrityError as e:
-                raise KeyError(f"Paciente '{patient_id}' no encontrado") from e
+            exists = self._conn.execute(
+                "SELECT 1 FROM patients WHERE patient_id = ?", (patient_id,)
+            ).fetchone()
+            if exists is None:
+                raise KeyError(f"Paciente '{patient_id}' no encontrado")
+            self._conn.execute(
+                "INSERT INTO sessions (session_id, patient_id, saved_at, data) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(session_id) DO NOTHING",
+                (session["session_id"], patient_id, session["saved_at"],
+                 json.dumps(session, ensure_ascii=False)),
+            )
 
     def list_patient_ids(self) -> list[str]:
         with self._lock:
@@ -157,9 +163,13 @@ class MongoHistoryStore:
         )
 
     def add_session(self, patient_id: str, session: dict) -> None:
-        result = self._col.update_one({"patient_id": patient_id}, {"$push": {"sessions": session}})
-        if result.matched_count == 0:
+        if self._col.count_documents({"patient_id": patient_id}, limit=1) == 0:
             raise KeyError(f"Paciente '{patient_id}' no encontrado")
+        # Solo se agrega si no hay otra sesión con el mismo id (idempotente).
+        self._col.update_one(
+            {"patient_id": patient_id, "sessions.session_id": {"$ne": session["session_id"]}},
+            {"$push": {"sessions": session}},
+        )
 
     def list_patient_ids(self) -> list[str]:
         return sorted(self._col.distinct("patient_id"))

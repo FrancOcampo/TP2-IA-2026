@@ -37,6 +37,7 @@ from interface.components import (
     patient_profile,
     trends_view,
 )
+from tools.history_tools import get_patient_history
 from tools.patient_tools import get_medication_schedule, load_patient_data
 
 # Configura el logging propio (consola legible + logs/agent.jsonl) al iniciar.
@@ -81,7 +82,8 @@ def on_patient_change(patient_id: str) -> str:
             meds = get_medication_schedule(patient_id)
         except Exception:
             meds = None
-    return patient_profile(patient_id, metrics, meds)
+    history = get_patient_history(patient_id) if patient_id else None
+    return patient_profile(patient_id, metrics, meds, history)
 
 
 def analyze(patient_id: str, doctor_context: str):

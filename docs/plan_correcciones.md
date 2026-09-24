@@ -55,7 +55,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F2-04** | [EAS-15](https://linear.app/easymetricdev/issue/EAS-15) | `compare_with_previous_sessions` no compara ni clasifica | 🟠 Alta | F1-04 | ⬜ |
 | **F2-05** | [EAS-16](https://linear.app/easymetricdev/issue/EAS-16) | `search_clinical_guidelines` sin parámetro de contexto | 🟡 Media | F2-06 | ⬜ |
 | **F2-06** | [EAS-17](https://linear.app/easymetricdev/issue/EAS-17) | Corpus ADA 2024 vacío (solo introducción) + ingesta no idempotente | 🟠 Alta | — | ⬜ |
-| **F2-07** | [EAS-18](https://linear.app/easymetricdev/issue/EAS-18) | Documento del paciente sin diagnósticos/comorbilidades; sesiones previas de ejemplo | 🟡 Media | F1-04 | ⬜ |
+| **F2-07** | [EAS-18](https://linear.app/easymetricdev/issue/EAS-18) | Documento del paciente sin diagnósticos/comorbilidades; sesiones previas de ejemplo | 🟡 Media | F1-04 | ✅ |
 | **F2-08** | [EAS-19](https://linear.app/easymetricdev/issue/EAS-19) | Conexiones MongoDB sin reutilizar / sin cerrar | 🟢 Baja | — | ✅ (MVP-01) |
 | **F3-01** | [EAS-20](https://linear.app/easymetricdev/issue/EAS-20) | Orquestador con salida estructurada del LLM (+ nodo de aclaración) | 🟠 Alta | F1-02, F1-04 | ⬜ |
 | **F3-02** | [EAS-21](https://linear.app/easymetricdev/issue/EAS-21) | Loop de refinamiento real: suficiencia estructurada + pedido concreto al Monitor | 🟠 Alta | F1-05, F1-06 | ⬜ |
@@ -447,8 +447,10 @@ El wrapper solo recibe `query` ([clinical.py:59-66](../agents/clinical.py#L59));
 4. El perfil de la UI (`components.patient_profile`) muestra diagnósticos y comorbilidades.
 
 **Aceptación**
-- [ ] `load_mongo.py` carga el perfil y las sesiones semilla; tests de integración actualizados.
-- [ ] Clínico con `PX99` no cae a fallback por excepción de tool.
+- [x] `load_history.py` carga el perfil y las sesiones semilla, de forma idempotente (`test_recargar_no_duplica_sesiones_semilla`).
+- [x] Las tools de historial no lanzan: `get_patient_history("PX99")` → `found: False` y los wrappers del Clínico devuelven `{"error": ...}` (`test_tool_del_clinico_no_propaga_excepciones`).
+
+**Decisión registrada:** [ADR-0012](adr/0012-perfil-del-paciente-y-sesiones-semilla.md). La medicación de base conserva la clave `medications` (no `baseline_medications`) para no romper el schema existente.
 
 ---
 

@@ -53,7 +53,7 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 | ID | Título | Nota | Estado |
 |---|---|---|---|
 | F2-01 | Metas de control DM2 + paciente P005 | Se implementa con la tabla propuesta; la validación 🩺 del equipo queda como check aparte | ✅ (🩺 pendiente) |
-| F2-07 | Perfil del paciente (diagnósticos, comorbilidades) + sesiones semilla; `found: False` en vez de excepción | Hace demostrable la comparación longitudinal | ⬜ |
+| F2-07 | Perfil del paciente (diagnósticos, comorbilidades) + sesiones semilla; `found: False` en vez de excepción | Hace demostrable la comparación longitudinal | ✅ |
 | F2-06 (1) | Corpus ADA | MVP: si no se incorpora el contenido, **el prompt deja de pedir citas de ADA** | ⬜ |
 
 ### M4 · Verificación del MVP
