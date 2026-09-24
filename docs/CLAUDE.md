@@ -19,7 +19,7 @@ tipo 2 (TP2 de Inteligencia Artificial 2026). No emite diagnósticos: produce re
 soporte a la decisión médica. Tres agentes coordinados sobre LangGraph:
 
 - **Orquestador** — enruta por inferencia de intención y gestiona el loop de refinamiento.
-- **Monitor** — análisis cuantitativo con tools determinísticas (stats, umbrales ADA).
+- **Monitor** — análisis cuantitativo con tools determinísticas (stats, metas de control DM2).
 - **Clínico** — interpreta hallazgos con RAG sobre guías clínicas + historial del paciente.
 
 Documentos fuente: [docs/TP_2 Agente.md](docs/TP_2%20Agente.md) (enunciado) y
@@ -80,7 +80,8 @@ uv lock                 # regenerar lockfile tras cambiar dependencias
   `window_metrics` es el **único** lugar del recorte temporal; `_compute_stats` es el núcleo
   puro testeable con listas. Leen de `data/sample/` hasta que B entregue Mongo/generador real.
 - [tools/threshold_tools.py](tools/threshold_tools.py) — `detect_threshold_violations(patient_id,
-  metric, timerange=None)` (→ `list[Alert]`) con `ADA_THRESHOLDS` (tabla §2.6). Detecta **hiper
+  metric, timerange=None)` (→ `list[Alert]`) con `THRESHOLDS` = `DM2_CONTROL_THRESHOLDS` (metas de
+  control, ADR-0011; bandas `Band` con comparador y fuente; `ADA_DIAGNOSTIC_THRESHOLDS` sin uso). Detecta **hiper
   e hipoglucemia**: bandas alta y baja, severidad `moderada`/`severa`. Núcleo puro
   `_detect_violations(metric, values, dates)`. Glucemias con ambas bandas; HbA1c solo alta;
   peso/presión sin umbral (ver caveats en el README).
@@ -151,6 +152,10 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
     BAJA además de la alta. Hipoglucemia ADA: `< 70` mg/dL → `moderada`, `< 54` → `severa`
     (glucemias en ayunas y postprandial; HbA1c no tiene banda baja). Vigilar hipoglucemias es
     central en el seguimiento de un diabético y antes el sistema era ciego a ellas.
+12. **Metas de control, no criterios diagnósticos** (D1, ADR-0011): todos los pacientes ya tienen
+    DM2, así que la banda alta usa metas de control (HbA1c ≥ 7 / > 9, ayunas > 130 / > 300,
+    postprandial ≥ 180 / > 300). Cada banda declara comparador y fuente. 🩺 Pendiente de
+    validación clínica del equipo.
 
 ## Convenciones
 
@@ -167,7 +172,7 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
 | `graph.py`, `router.py` | ✅ grafo funcional end-to-end; Monitor y Clínico reales; routing heurístico con **paciente activo** (`active_patient_id`): el cambio de paciente o el reinicio limpian el estado derivado (ADR-0004) |
 | `agents/monitor.py` | ✅ **Agente Monitor real**: loop ReAct (ChatGroq + 4 tools LangChain), fallback determinístico sin API key, produce `MonitorAnalysis` |
 | `agents/clinical.py` | ✅ **Agente Clínico real**: loop ReAct (ChatGroq + 3 tools LangChain), fallback determinístico sin API key, modos reporte/seguimiento |
-| Tools del Monitor (EHR/umbrales) + `data/sample/` | ✅ `patient_tools.py` y `threshold_tools.py` listos y testeados; envueltas como `@tool` LangChain en `agents/monitor.py`; CSVs P001–P004 creados |
+| Tools del Monitor (EHR/umbrales) + `data/sample/` | ✅ `patient_tools.py` y `threshold_tools.py` listos y testeados; envueltas como `@tool` LangChain en `agents/monitor.py`; CSVs P001–P005 creados |
 | Testing (estrategia) | ✅ organizado por objetivo; ver **[docs/tests.md](docs/tests.md)** (tools / plomería / calidad de la IA) |
 | `tests/test_graph.py` | ✅ plomería del grafo en 2 modos: determinístico (fallback forzado, gate de CI) + estocástico (`llm`, LLM real, aserciones laxas) |
 | `tests/test_monitor_tools.py` | ✅ tools del Monitor, determinístico sobre `data/sample/*.csv` |
@@ -176,7 +181,7 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
 | `interface/app.py` (Gradio) | ✅ UI completa: 3 pestañas (Consulta clínica + Observabilidad dev + Evaluación) contra el grafo real |
 | `tests/conftest.py`, `.env.example` (LangSmith) | ✅ `load_dotenv` + vars de tracing |
 | Tools de historial (`get_patient_history`, `compare_*`, `update_*`) | ✅ `tools/history_tools.py` sobre `HistoryStore` (`tools/history_store.py`: SQLite por defecto, Mongo opcional; ADR-0005); conectado al Agente Clínico |
-| `data/generate_patients.py` | ✅ 4 perfiles sintéticos (P001–P004) generando CSVs en `data/sample/` |
+| `data/generate_patients.py` | ✅ 5 perfiles sintéticos (P001–P005; P005 = descompensación severa) generando CSVs en `data/sample/` |
 | Historial (schema + carga) | ✅ `data/load_history.py` carga los pacientes de `data/sample/` en el almacén (`data/tp2.db` por defecto; idempotente, conserva sesiones). MongoDB opcional vía Docker Compose (`docker/`) |
 | RAG — ingestión (`rag/ingest.py`) | ✅ chunking (con tamaño mínimo por corte) + embeddings locales + ChromaDB persistido en `data/chroma_db/`; idempotente (upsert) y `--rebuild`; metadata `section`; config compartida en `rag/config.py`; parámetros en `rag/RAG_TUNING.md` |
 | RAG — retrieval (`rag/retriever.py`) | ✅ `search_clinical_guidelines()` + `get_rag_fragment()`; probar con `uv run python rag/retriever.py` |

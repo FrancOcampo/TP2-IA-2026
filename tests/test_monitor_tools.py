@@ -22,7 +22,9 @@ from tools.patient_tools import (
     window_metrics,
 )
 from tools.threshold_tools import (
-    ADA_THRESHOLDS,
+    ADA_DIAGNOSTIC_THRESHOLDS,
+    DM2_CONTROL_THRESHOLDS,
+    THRESHOLDS,
     _detect_violations,
     detect_threshold_violations,
 )
@@ -217,12 +219,26 @@ def test_calculate_stats_metrica_invalida():
 
 def test_detect_severidades_moderada_y_severa():
     fechas = [date(2025, 1, 1), date(2025, 2, 1), date(2025, 3, 1)]
-    # 90 normal (<100), 110 moderada (100-125), 130 severa (>=126).
-    alerts = _detect_violations("glucose_fasting", [90.0, 110.0, 130.0], fechas)
+    # 120 en meta (80-130), 140 moderada (> 130), 310 severa (> 300).
+    alerts = _detect_violations("glucose_fasting", [120.0, 140.0, 310.0], fechas)
     assert [a.severity for a in alerts] == ["moderada", "severa"]
     assert all(isinstance(a, Alert) for a in alerts)
-    assert alerts[0].value == 110.0
+    assert alerts[0].value == 140.0
     assert alerts[0].date == date(2025, 2, 1)
+
+
+def test_tabla_por_defecto_son_metas_de_control():
+    """D1: los pacientes ya tienen DM2; los criterios diagnósticos no se usan por defecto."""
+    assert THRESHOLDS is DM2_CONTROL_THRESHOLDS
+    f = [date(2025, 1, 1)]
+    assert _detect_violations("hba1c", [6.1], f) == [], "HbA1c 6.1 % es buen control"
+    assert _detect_violations("hba1c", [6.1], f, table=ADA_DIAGNOSTIC_THRESHOLDS)[0].severity == "moderada"
+
+
+def test_detect_descripcion_traza_umbral_y_fuente():
+    alert = _detect_violations("hba1c", [8.2], [date(2025, 1, 1)])[0]
+    assert ">= 7 %" in alert.description
+    assert "SAD 2025" in alert.description
 
 
 def test_detect_metrica_sin_umbral_devuelve_vacio():
@@ -234,10 +250,21 @@ def test_detect_largos_desalineados_lanza():
         _detect_violations("hba1c", [6.0, 6.5], [date(2025, 1, 1)])
 
 
-def test_detect_limites_exactos_ada():
-    f = [date(2025, 1, 1)]
-    assert _detect_violations("hba1c", [ADA_THRESHOLDS["hba1c"]["high"]["alerta"]], f)[0].severity == "moderada"
-    assert _detect_violations("hba1c", [ADA_THRESHOLDS["hba1c"]["high"]["critico"]], f)[0].severity == "severa"
+@pytest.mark.parametrize("metric, value, esperado", [
+    # HbA1c: moderada >= 7.0 · severa > 9.0 (estricto)
+    ("hba1c", 6.9, None), ("hba1c", 7.0, "moderada"), ("hba1c", 9.0, "moderada"), ("hba1c", 9.1, "severa"),
+    # Ayunas: moderada > 130 (estricto) · severa > 300 · hipo < 70 / < 54
+    ("glucose_fasting", 130.0, None), ("glucose_fasting", 131.0, "moderada"),
+    ("glucose_fasting", 300.0, "moderada"), ("glucose_fasting", 301.0, "severa"),
+    ("glucose_fasting", 70.0, None), ("glucose_fasting", 69.0, "moderada"),
+    ("glucose_fasting", 54.0, "moderada"), ("glucose_fasting", 53.0, "severa"),
+    # Postprandial: moderada >= 180 · severa > 300
+    ("glucose_postprandial", 179.0, None), ("glucose_postprandial", 180.0, "moderada"),
+    ("glucose_postprandial", 300.0, "moderada"), ("glucose_postprandial", 301.0, "severa"),
+])
+def test_detect_limites_exactos_metas_de_control(metric, value, esperado):
+    alerts = _detect_violations(metric, [value], [date(2025, 1, 1)])
+    assert (alerts[0].severity if alerts else None) == esperado
 
 
 def test_detect_hipoglucemia_moderada_y_severa():
@@ -261,9 +288,23 @@ def test_threshold_controlado_sin_alertas():
     assert detect_threshold_violations("P001", "glucose_fasting") == []
 
 
-def test_threshold_tendencia_ascendente_tiene_severas():
+def test_threshold_tendencia_ascendente_solo_moderadas():
+    # P002 llega a HbA1c 8.2: fuera de meta (>= 7.0) pero sin superar 9.0 → 6 moderadas.
     alerts = detect_threshold_violations("P002", "hba1c")
-    assert "severa" in {a.severity for a in alerts}   # P002 llega a HbA1c >= 6.5
+    assert [a.severity for a in alerts] == ["moderada"] * 6
+
+
+def test_threshold_p002_total_de_alertas():
+    total = sum(len(detect_threshold_violations("P002", m)) for m in THRESHOLDS)
+    assert total == 17  # ayunas 5 · HbA1c 6 · postprandial 6 (plan F2-01)
+
+
+def test_threshold_descompensacion_severa_p005():
+    alerts = [a for m in THRESHOLDS for a in detect_threshold_violations("P005", m)]
+    severas = [a for a in alerts if a.severity == "severa"]
+    assert any("hipoglucemia" in a.description for a in severas), "al menos una hipoglucemia < 54"
+    assert any(a.metric == "glucose_fasting" and a.value > 300 for a in severas)
+    assert all(a.severity == "severa" for a in alerts if a.metric == "hba1c")
 
 
 def test_threshold_metrica_sin_umbral_devuelve_vacio():
@@ -280,9 +321,10 @@ def test_threshold_detecta_hipoglucemia_de_p003():
 
 
 def test_threshold_respeta_timerange():
-    # Primeros meses de P002 con HbA1c < 6.5 (solo moderadas); la ventana los aísla.
-    alerts = detect_threshold_violations("P002", "hba1c", TimeRange(start=date(2025, 1, 15), end=date(2025, 3, 15)))
-    assert {a.severity for a in alerts} == {"moderada"}
+    # Primeros meses de P002 con HbA1c < 7.0 (en meta); los últimos 3, fuera de meta.
+    primeros = TimeRange(start=date(2025, 1, 15), end=date(2025, 3, 15))
+    assert detect_threshold_violations("P002", "hba1c", primeros) == []
+    assert len(detect_threshold_violations("P002", "hba1c", TimeRange(last_n_months=3))) == 3
 
 
 # -------------------------------------------------------------------
