@@ -24,7 +24,7 @@ infraestructura ni LLM cuando no se cuenta con ellos.
 ### 1. Tools — `test_monitor_tools.py` y `test_clinico_tools.py`
 Verifican **determinísticamente** que las funciones que usan los agentes calculan lo correcto
 (mismo input → mismo output). Las del Monitor son puras (corren sin nada). Las del Clínico
-cruzan I/O (Mongo, Ollama, ChromaDB), así que son de integración; no agregamos una capa
+cruzan I/O (ChromaDB indexado), así que son de integración; no agregamos una capa
 "offline mockeada" porque levantar la infra es trivial y los mocks no aportarían valor real.
 
 ### 2. Plomería — `test_graph.py` (dos modos explícitos)

@@ -96,8 +96,7 @@ Detalle de los campos y eventos: [docs/logs.md](docs/logs.md). Más sobre la UI:
 Opcional. Activa los **agentes ReAct reales** (en vez de los fallbacks) y consultas reales a
 historial y al RAG. Requiere, además de `uv`:
 
-- **Groq API key** — LLM (`llama-3.3-70b`) de los agentes Monitor y Clínico.
-- **[Ollama](https://ollama.com/)** con el modelo `nomic-embed-text` — embeddings del RAG.
+- **Groq API key** — LLM (`llama-3.3-70b-versatile`) de los agentes Monitor y Clínico (o Gemini, ver `.env.example`).
 - **LangSmith API key** *(opcional)* — observabilidad en la nube.
 
 ### Preparación
@@ -109,18 +108,15 @@ git): no hay que instalar nada. Para usar **MongoDB** (Docker o nube) definí
 `HISTORY_BACKEND=mongo` y `MONGO_URI` en `.env`; ver [docker/README.md](docker/README.md) y
 [ADR-0005](docs/adr/0005-historial-en-sqlite-local.md).
 
-**3. Ollama (embeddings del RAG).** Instalá [Ollama](https://ollama.com/), asegurate de que el
-servicio esté corriendo (`http://localhost:11434`) y descargá el modelo:
-
-```bash
-ollama pull nomic-embed-text
-```
+**3. Embeddings del RAG.** Corren en proceso (modelo ONNX integrado en ChromaDB, ~80 MB que se
+descargan la primera vez): no hay que instalar nada. Ollama es opcional
+(`EMBEDDING_PROVIDER=ollama`, ver [rag/RAG_TUNING.md](rag/RAG_TUNING.md)).
 
 **4. Cargar datos e indexar guías** (una sola vez):
 
 ```bash
 uv run python data/load_history.py  # carga los pacientes en el historial (SQLite por defecto)
-uv run python rag/ingest.py         # indexa las guías clínicas en ChromaDB
+uv run python rag/ingest.py         # indexa las guías clínicas en ChromaDB (~2.5 min; --rebuild para reindexar)
 ```
 
 > **Nota sobre la ingesta del RAG.** `data/chroma_db/` está en `.gitignore`, así que un clon
@@ -131,7 +127,7 @@ uv run python rag/ingest.py         # indexa las guías clínicas en ChromaDB
 ### Verificación del modo completo
 
 ```bash
-uv run pytest -m integration        # requiere Ollama + ChromaDB indexado
+uv run pytest -m integration        # requiere el índice de ChromaDB (rag/ingest.py)
 ```
 
 Con la infraestructura activa, al **Analizar** un paciente en la UI verás reportes redactados por
@@ -145,8 +141,6 @@ Una vez hecha la instalación y la carga inicial (pasos 1–4 de arriba), en el 
 ```bash
 uv run python -m interface.app    # interfaz web (modo completo) → http://127.0.0.1:7860
 ```
-
-Ollama (app de Windows) se auto-inicia al encender la PC, así que casi siempre solo hace falta ese comando.
 
 **No** hay que repetir `data/load_history.py` ni `rag/ingest.py`: se corren **una sola vez** (los
 datos persisten en `data/tp2.db` y en `data/chroma_db/`). Solo se re-ejecutan si cambian

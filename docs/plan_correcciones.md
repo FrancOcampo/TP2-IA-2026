@@ -413,12 +413,14 @@ El wrapper solo recibe `query` ([clinical.py:59-66](../agents/clinical.py#L59));
 
 **Cambios**
 1. Incorporar al corpus las secciones relevantes de *Standards of Care 2024*: **2** (diagnóstico), **6** (metas glucémicas e hipoglucemia), **9** (tratamiento farmacológico) y **10** (riesgo cardiovascular / PA). Si no se pueden incorporar, **quitar las afirmaciones sobre ADA** del prompt y del artículo.
-2. `ingest.py`: `upsert` en vez de `add`, flag `--rebuild` que borra y recrea la colección, y metadata `section` (último encabezado Markdown del chunk).
-3. `retriever.py`: si la colección no existe, loguear un error claro una vez (hoy devuelve `[]` en silencio y el reporte sale sin citas).
+2. ✅ (MVP-02) `ingest.py`: `upsert` en vez de `add`, flag `--rebuild` que borra y recrea la colección, y metadata `section` (último encabezado Markdown del chunk).
+3. ✅ (MVP-02) `retriever.py`: si la colección no existe, loguear un error claro una vez (hoy devuelve `[]` en silencio y el reporte sale sin citas).
+
+> MVP-02 corrigió además un bug del chunker (22 932 chunks → 2450) y cambió los embeddings a locales ([ADR-0006](adr/0006-embeddings-locales-sin-ollama.md)). El punto 1 (corpus ADA) sigue pendiente.
 
 **Aceptación**
 - [ ] Query "hipoglucemia nivel 2 < 54 mg/dL" devuelve un fragmento de `ADA_2024.md`.
-- [ ] Correr `ingest.py` dos veces no duplica ni falla; `--rebuild` reindexa.
+- [x] Correr `ingest.py` dos veces no duplica ni falla; `--rebuild` reindexa (`tests/test_rag_ingest.py`).
 
 ---
 
