@@ -170,7 +170,9 @@ class AgentState(TypedDict):
     # -- Control del grafo --
     iteration: int        # contador para el guardrail (máx 3)
     is_followup: bool     # True si es pregunta de seguimiento, False si es consulta nueva
-    awaiting_confirmation: bool  # True si se espera confirmación del médico para guardar sesión
+    save_requested: bool  # señal EXPLÍCITA de guardado (botón o "confirmar"/"guardar sesión"); D5
+    save_result: Optional[dict]  # {"ok": bool, "session_id"?: str, "error"?: str} del último guardado
+    analysis_query: Optional[str]  # consulta que originó el análisis/reporte vigente (se persiste al guardar)
     information_sufficient: bool  # señal del Clínico: False → el Orquestador reenvía al Monitor (loop de refinamiento)
     error: Optional[str]  # error de dominio para el médico (p. ej. paciente sin datos); corta el flujo (ADR-0003)
 

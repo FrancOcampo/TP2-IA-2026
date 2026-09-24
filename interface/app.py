@@ -153,16 +153,13 @@ def save_session(thread_id: str, history: list):
     if not thread_id:
         return history + [{"role": "assistant", "content": "No hay sesión activa para guardar."}]
     try:
-        langgraph_app.invoke({"query": "confirmar"}, _config(thread_id))
-        # NOTA: hoy la rama `save` del grafo termina en END sin persistir. La tool de escritura
-        # (tools/history_tools.update_patient_history) YA existe; falta cablear el nodo `save` en
-        # orchestrator/graph.py (pendiente del Orquestador). Ver docs/estado_proyecto.md.
-        msg = ("💾 Confirmación recibida. La persistencia en el historial todavía no está activa: "
-               "falta cablear la rama `save` del grafo a `update_patient_history` (pendiente del Orquestador).")
+        # Señal explícita (D5): no depende de interpretar texto.
+        out = langgraph_app.invoke({"save_requested": True, "query": "guardar sesión"}, _config(thread_id))
+        msg = _last_assistant(out.get("conversation", []))
     except Exception as e:
         msg = f"⚠️ Error al guardar: {e}"
     return history + [
-        {"role": "user", "content": "confirmar"},
+        {"role": "user", "content": "💾 Guardar sesión"},
         {"role": "assistant", "content": msg},
     ]
 

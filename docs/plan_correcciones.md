@@ -46,7 +46,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F1-01** | [EAS-6](https://linear.app/easymetricdev/issue/EAS-6) | Paciente inexistente / métricas sin datos informados como "controlado" | 🔴 Crítica | F0-01 | ✅ |
 | **F1-02** | [EAS-7](https://linear.app/easymetricdev/issue/EAS-7) | Contaminación de estado al cambiar de paciente en el mismo thread | 🔴 Crítica | F0-01 | ✅ |
 | **F1-03** | [EAS-8](https://linear.app/easymetricdev/issue/EAS-8) | La respuesta de seguimiento sobrescribe el reporte | 🟠 Alta | F0-01 | ✅ |
-| **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ⬜ |
+| **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ✅ |
 | **F1-05** | [EAS-10](https://linear.app/easymetricdev/issue/EAS-10) | Monitor mezcla ventanas temporales y duplica alertas | 🟠 Alta | F0-01 | ⬜ |
 | **F1-06** | [EAS-11](https://linear.app/easymetricdev/issue/EAS-11) | Suficiencia de información hardcodeada (P004) y por palabra clave | 🟠 Alta | F1-01 | ⬜ |
 | **F2-01** | [EAS-12](https://linear.app/easymetricdev/issue/EAS-12) | Umbrales diagnósticos usados como umbrales de control 🩺 | 🔴 Crítica | — | ⬜ |
@@ -205,6 +205,8 @@ Clínico recibe como "reporte previo" la respuesta anterior, y "Guardar sesión"
 4. `eval_runner._run_case`: `obtained = followup_answer si el caso tiene setup, si no report`.
 5. UI: sin cambios funcionales (usa el último mensaje de `conversation`), pero verificar que el panel de reporte no cambia al chatear.
 
+**Decisión registrada:** [ADR-0007](adr/0007-reporte-y-respuesta-de-seguimiento-separados.md).
+
 **Aceptación**
 - [x] `test_seguimiento_no_pisa_reporte` pasa (determinístico) y hay un test `llm` equivalente (`test_graph.py::test_seguimiento_estocastico_no_pisa_reporte`).
 - [x] `eval_runner` registra `followup_answer` como `obtained` cuando el último mensaje es un seguimiento (`is_followup`), no según tenga `setup`: un caso futuro con setup puede ser un cambio de paciente. Falta confirmarlo en una corrida de `happy_03` con LLM real.
@@ -233,11 +235,13 @@ Clínico recibe como "reporte previo" la respuesta anterior, y "Guardar sesión"
 5. UI `save_session`: invocar con `{"save_requested": True}` y mostrar el resultado real (id o error, p. ej. "MongoDB no disponible").
 
 **Aceptación**
-- [ ] `test_si_no_dispara_guardado` pasa.
-- [ ] `test_guardar_persiste` (con `update_patient_history` mockeado) verifica el contenido de `session_data`.
-- [ ] Integración: tras guardar, `get_patient_history(pid)["sessions"][-1]["metrics_summary"]` tiene los `last_value`.
-- [ ] Sin MongoDB, la UI muestra el error; no dice "guardado".
-- [ ] `test_confirmacion_termina_sin_agentes` actualizado a la nueva señal.
+- [x] `test_si_no_dispara_guardado` pasa.
+- [x] `test_guardar_persiste` (con `update_patient_history` mockeado) verifica el contenido de `session_data`.
+- [x] Tras guardar, `get_patient_history(pid)["sessions"][-1]["metrics_summary"]` tiene los `last_value`. Ya no requiere infraestructura: `tests/test_guardado.py` corre contra un SQLite temporal (MVP-01).
+- [x] Si el historial falla, el médico ve el error y nunca "guardado" (`test_historial_no_disponible_informa_el_error`).
+- [x] `test_confirmacion_termina_sin_agentes` actualizado a la nueva señal.
+
+**Decisión registrada:** [ADR-0008](adr/0008-guardado-explicito-de-sesion.md). Además de lo previsto, se agregó `AgentState.analysis_query`: al guardar, `query` ya es "guardar sesión" y se perdía la consulta que originó el reporte. "cancelar" termina con un aviso sin nodo propio.
 
 ---
 
@@ -643,7 +647,7 @@ Ver §9.
 | `AgentState` | `+ active_patient_id: Optional[str]` | F1-02 |
 | `AgentState` | `+ error: Optional[str]` | F1-01 |
 | `AgentState` | `+ followup_answer: Optional[str]` | F1-03 |
-| `AgentState` | `awaiting_confirmation` → `save_requested: bool`; `+ save_result: Optional[dict]` | F1-04 |
+| `AgentState` | `awaiting_confirmation` → `save_requested: bool`; `+ save_result: Optional[dict]`; `+ analysis_query: Optional[str]` | F1-04 |
 | `AgentState` | `+ refinement_request: Optional[list[RefinementRequest]]` | F3-02 |
 | `AgentState` | `+ report_structured: Optional[ClinicalReport]` | F3-04 |
 | `AgentState` | `+ execution_mode: dict[str, str]` | F3-06 |

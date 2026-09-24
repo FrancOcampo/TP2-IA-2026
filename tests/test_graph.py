@@ -54,12 +54,15 @@ def test_followup_va_directo_al_clinico(app):
 
 
 def test_confirmacion_termina_sin_agentes(app):
-    """'confirmar' marca awaiting_confirmation y corta el flujo."""
+    """'confirmar' va al nodo save (sin re-ejecutar Monitor ni Clínico) y apaga la señal."""
     init = {"patient_id": "P001", "query": "Analizá al paciente", "conversation": []}
-    app.invoke(init, _cfg("t-confirm"))
+    antes = app.invoke(init, _cfg("t-confirm"))
     out = app.invoke({"query": "confirmar"}, _cfg("t-confirm"))
 
-    assert out["awaiting_confirmation"] is True
+    assert out["save_result"] is not None           # pasó por el nodo save
+    assert out["save_requested"] is False           # la señal no queda encendida
+    assert out["report"] == antes["report"]         # no se re-ejecutó el pipeline
+    assert len(out["conversation"]) == len(antes["conversation"]) + 1  # solo el aviso de guardado
 
 
 # ---- Unit tests de las funciones de routing ----
@@ -80,7 +83,8 @@ def test_decide_next_termina_si_info_suficiente():
 
 
 def test_route_from_orchestrator():
-    assert route_from_orchestrator({"awaiting_confirmation": True}) == "save"
+    assert route_from_orchestrator({"save_requested": True}) == "save"
+    assert route_from_orchestrator({"query": "cancelar"}) == "cancel"
     assert route_from_orchestrator({"is_followup": True}) == "followup"
     assert route_from_orchestrator({}) == "pipeline"
 

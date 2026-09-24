@@ -7,9 +7,10 @@ import re
 
 from orchestrator.state import AgentState
 
-# Palabras clave de confirmación / cancelación del guardado de sesión
-_CONFIRM_WORDS = {"confirmar", "confirm", "sí", "si", "yes"}
-_CANCEL_WORDS = {"cancelar", "cancel", "no"}
+# Textos inequívocos de confirmación / cancelación del guardado de sesión (D5).
+# "sí", "si", "yes" y "no" NO son comandos: son respuestas frecuentes en un chat clínico.
+_CONFIRM_WORDS = {"confirmar", "guardar sesión", "guardar sesion"}
+_CANCEL_WORDS = {"cancelar", "cancelar guardado"}
 
 # Id de paciente mencionado en un mensaje (P001, P123…)
 _PATIENT_ID_RE = re.compile(r"\bP\d{3,}\b", re.IGNORECASE)
@@ -45,11 +46,15 @@ def is_followup_message(state: AgentState, message: str) -> bool:
     return bool(state.get("report"))
 
 
+def _normalize(message: str) -> str:
+    return (message or "").strip().lower().rstrip(".!")
+
+
 def is_confirmation_message(message: str) -> bool:
-    """Detecta si el médico confirmó guardar la sesión."""
-    return message.strip().lower() in _CONFIRM_WORDS
+    """Detecta si el médico confirmó guardar la sesión (texto exacto, no palabras sueltas)."""
+    return _normalize(message) in _CONFIRM_WORDS
 
 
 def is_cancellation_message(message: str) -> bool:
     """Detecta si el médico canceló el guardado de la sesión."""
-    return message.strip().lower() in _CANCEL_WORDS
+    return _normalize(message) in _CANCEL_WORDS

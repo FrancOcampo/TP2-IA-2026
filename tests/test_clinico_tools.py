@@ -40,20 +40,24 @@ def test_compare_with_previous_sessions_sin_historial(seeded_store):
 
 
 def test_update_y_compare_con_sesion_guardada(seeded_store):
-    session_id = update_patient_history(
-        "P002", "Analizá al paciente P002", "reporte", [], metrics_summary={"hba1c": 8.2}
-    )
-    assert not session_id.startswith("error"), session_id
+    result = update_patient_history("P002", {
+        "query": "Analizá al paciente P002", "report": "reporte", "alerts": [],
+        "metrics_summary": {"hba1c": 8.2},
+    })
+    assert result["ok"] is True, result
+    saved = get_patient_history("P002")["sessions"][-1]
+    assert saved["session_id"] == result["session_id"]
+    assert saved["report_summary"] == "reporte"
 
-    result = compare_with_previous_sessions("P002", current_metrics={"hba1c": 7.9})
-    assert result["sessions_count"] == 1
-    assert result["previous_session"]["metrics_summary"] == {"hba1c": 8.2}
-    assert result["deltas"] == {"hba1c": -0.3}
+    comparison = compare_with_previous_sessions("P002", current_metrics={"hba1c": 7.9})
+    assert comparison["sessions_count"] == 1
+    assert comparison["previous_session"]["metrics_summary"] == {"hba1c": 8.2}
+    assert comparison["deltas"] == {"hba1c": -0.3}
 
 
 def test_update_paciente_inexistente_no_inventa_sesion(seeded_store):
-    result = update_patient_history("PX99", "q", "r", [])
-    assert result.startswith("error")
+    result = update_patient_history("PX99", {"report": "r"})
+    assert result == {"ok": False, "error": "El paciente 'PX99' no está en el historial."}
 
 
 @pytest.mark.integration

@@ -44,7 +44,7 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 |---|---|---|
 | F1-02 | Aislar estado al cambiar de paciente | ✅ |
 | F1-03 | La respuesta de seguimiento no pisa el reporte | ✅ |
-| F1-04 | "Guardar sesión" persiste (en `HistoryStore`); "sí" no dispara guardado | ⬜ |
+| F1-04 | "Guardar sesión" persiste (en `HistoryStore`); "sí" no dispara guardado | ✅ |
 | F1-05 | Monitor con una ventana coherente y sin alertas duplicadas | ⬜ |
 | F1-06 | Suficiencia de información sin hardcodeo por id | ⬜ |
 

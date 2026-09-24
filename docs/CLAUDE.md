@@ -217,9 +217,7 @@ Coordinación crítica:
 2. ~~Implementar `agents/clinical.py` (Agente Clínico real) e integrar en `graph.py`~~ **✅ HECHO**
 3. ~~Conectar MongoDB real y RAG real (B)~~ **✅ HECHO** (merge `dev/B`; stubs eliminados).
 4. ~~Completar la interfaz Gradio + `interface/components.py`~~ **✅ HECHO** (merge UI).
-5. Agregar el nodo de persistencia (**Integrante A / Orquestador**): rama `save` → `update_patient_history`
-   (hoy `save` termina en `END` sin persistir). La tool `tools/mongo_tools.update_patient_history` ya existe
-   (B/C); falta solo cablear el nodo en `graph.py`. Marcado con `TODO` en `route_from_orchestrator`.
+5. ~~Agregar el nodo de persistencia~~ **✅ HECHO** (F1-04, ADR-0008): nodo `save` → `update_patient_history`.
 6. Reemplazar la heurística de `router.py` por clasificación vía LLM.
 7. ~~Completar el harness de evaluación de D~~ **✅ HECHO**: evaluación cualitativa con `tests/eval_runner.py` + `tests/cases/*.json` (ver [docs/tests.md](docs/tests.md)).
 8. **Detección de "datos insuficientes" en el Agente Clínico real** (A/C): hoy solo el fallback la detecta (P004). No es ya un problema de tests —el gate de `test_graph.py` corre en modo determinístico— sino una brecha de comportamiento del agente; conviene cerrarla para que el loop de refinamiento se dispare también con LLM real.

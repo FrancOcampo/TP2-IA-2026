@@ -107,43 +107,33 @@ def compare_with_previous_sessions(
 # Tool 3 — update_patient_history
 # -------------------------------------------------------------------
 
-def update_patient_history(
-    patient_id: str,
-    query: str,
-    report: str,
-    alerts: list[dict],
-    metrics_summary: Optional[dict] = None,
-) -> str:
+def update_patient_history(patient_id: str, session_data: dict) -> dict:
     """
     Agrega la sesión actual al historial del paciente.
 
-    IMPORTANTE: solo llamar con confirmación explícita del médico (el grafo
-    lo controla con `awaiting_confirmation`; esta función no verifica eso).
+    IMPORTANTE: solo llamar con confirmación explícita del médico (el grafo lo controla con
+    `save_requested` en el nodo `save`; esta función no verifica eso).
 
-    Parámetros:
-      - patient_id: ID del paciente.
-      - query: consulta del médico que disparó la sesión.
-      - report: reporte generado por el Agente Clínico.
-      - alerts: lista de alertas (dicts con metric, value, severity, date, description).
-      - metrics_summary: dict opcional con valores clave de la sesión actual
-        (e.g. {"hba1c": 7.2, "glucose_fasting": 130.0}); permite comparación futura.
+    `session_data` es el contenido de la sesión (ver `orchestrator.graph.build_session_data`):
+    date, query, doctor_context, report, alerts, metrics_summary, longitudinal_comparison,
+    suggested_questions. Se le agregan `session_id`, `saved_at` y `report_summary` (resumen
+    corto para las comparaciones de `compare_with_previous_sessions`).
 
-    Devuelve el session_id asignado, o un mensaje de error si no se pudo guardar.
-
-    TODO(F1-04): recibir `session_data: dict` y devolver {"ok", "session_id"?, "error"?}.
+    Devuelve {"ok": True, "session_id": str} o {"ok": False, "error": str}; nunca lanza.
     """
+    report = session_data.get("report") or ""
     session = {
-        "session_id": str(uuid.uuid4()),
         "date": date.today().isoformat(),
+        **session_data,
+        "session_id": str(uuid.uuid4()),
         "saved_at": datetime.now(timezone.utc).isoformat(),
-        "query": query,
-        "report_summary": report[:500] if report else "",  # resumen corto para comparaciones
-        "alerts": alerts,
-        "metrics_summary": metrics_summary or {},
+        "report_summary": report[:500],
     }
     try:
         get_store().add_session(patient_id, session)
-        return session["session_id"]
+    except KeyError:
+        return {"ok": False, "error": f"El paciente '{patient_id}' no está en el historial."}
     except Exception as e:
         logger.warning("No se pudo guardar la sesión: %s", e)
-        return f"error: no se pudo guardar la sesión ({e})"
+        return {"ok": False, "error": f"Historial no disponible ({e})."}
+    return {"ok": True, "session_id": session["session_id"]}
