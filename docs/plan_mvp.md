@@ -33,10 +33,10 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 
 | ID | Título | Absorbe | Estado |
 |---|---|---|---|
-| **MVP-01** | Historial de pacientes en SQLite local, detrás de una interfaz `HistoryStore` (Mongo queda como backend opcional) | F2-08 | ✅ |
-| **MVP-02** | RAG sin Ollama: embeddings locales por defecto, ingesta idempotente con `--rebuild`, error claro si falta el índice | F2-06 (2, 3) | ✅ |
-| **MVP-03** | Configuración del LLM: una sola constante de modelo, alias de la API key de Gemini, error claro sin key | F4-01 | ✅ |
-| **MVP-04** | Arranque en un comando: `main.py` inicializa base + índice si faltan y lanza la UI; logs UTF-8 | F4-03 (`main.py`), F4-04 | ✅ |
+| **MVP-01** ([EAS-33](https://linear.app/easymetricdev/issue/EAS-33)) | Historial de pacientes en SQLite local, detrás de una interfaz `HistoryStore` (Mongo queda como backend opcional) | F2-08 | ✅ |
+| **MVP-02** ([EAS-34](https://linear.app/easymetricdev/issue/EAS-34)) | RAG sin Ollama: embeddings locales por defecto, ingesta idempotente con `--rebuild`, error claro si falta el índice | F2-06 (2, 3) | ✅ |
+| **MVP-03** ([EAS-35](https://linear.app/easymetricdev/issue/EAS-35)) | Configuración del LLM: una sola constante de modelo, alias de la API key de Gemini, error claro sin key | F4-01 | ✅ |
+| **MVP-04** ([EAS-36](https://linear.app/easymetricdev/issue/EAS-36)) | Arranque en un comando: `main.py` inicializa base + índice si faltan y lanza la UI; logs UTF-8 | F4-03 (`main.py`), F4-04 | ✅ |
 
 ### M2 · Correctitud del flujo (ya planificado)
 
@@ -60,8 +60,8 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 
 | ID | Título | Estado |
 |---|---|---|
-| **MVP-05** | Smoke test e2e determinístico (base SQLite temporal): analizar → seguir → guardar → re-analizar ve la sesión | ✅ (`tests/test_smoke_mvp.py`) |
-| — | Corrida del `eval_runner` con LLM real, sin casos `error` | ⬜ |
+| **MVP-05** ([EAS-37](https://linear.app/easymetricdev/issue/EAS-37)) | Smoke test e2e determinístico (base SQLite temporal): analizar → seguir → guardar → re-analizar ve la sesión | ✅ (`tests/test_smoke_mvp.py`) |
+| **MVP-06** ([EAS-38](https://linear.app/easymetricdev/issue/EAS-38)) | Corrida del `eval_runner` con LLM real, sin casos `error` (bloqueado: falta API key) | ⬜ |
 | — | README con el camino de 3 comandos | ✅ |
 
 ## Fuera del MVP
@@ -76,7 +76,7 @@ Estado al 2026-09-24: M1, M2 y M3 hechos y mergeados en `develop` (sin push). Ga
 | # | Pendiente | Quién | Bloquea |
 |---|---|---|---|
 | 1 | **API key de LLM** en `.env`: Groq (`GROQ_API_KEY`, gratis, `llama-3.3-70b-versatile`) o Gemini (`LLM_PROVIDER=gemini` + `GEMINI_API_KEY`) | Franco | Corrida del `eval_runner` con LLM real (último ítem de M4) |
-| 2 | **Autorizar Linear** en Claude Code para sincronizar: EAS-7…EAS-12, EAS-17, EAS-18 → estado real; EAS-19/EAS-27 absorbidos por MVP-01/MVP-03; crear issues para MVP-01…MVP-05 | Franco | Consistencia del tablero |
+| 2 | ~~Autorizar Linear y sincronizar~~ ✅ 2026-09-24: EAS-6…11, 18, 19, 27, 30 en Done; EAS-12, 17, 29 en In Progress (con lo que falta comentado); MVP-01…06 = EAS-33…38 | Franco | — |
 | 3 | **Validación clínica 🩺** de la tabla de metas de control ([ADR-0011](adr/0011-metas-de-control-dm2.md)), dejando fecha y quién en F2-01 | Equipo | Cierre formal de F2-01 |
 | 4 | **Contenido ADA**: decidir si se incorporan las secciones 2/6/9/10 de los *Standards 2024* (derechos de autor) o se quitan las menciones a ADA del artículo ([ADR-0013](adr/0013-corpus-sin-ada-y-huella-del-indice.md)) | Equipo | Cierre de F2-06 |
 | 5 | **Push** de `develop` a `origin` | Franco | Que el equipo vea los cambios |
