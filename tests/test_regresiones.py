@@ -227,7 +227,6 @@ def _run_monitor(monkeypatch, patient_id: str, tool_calls: list[dict]):
     return monitor.run_monitor_agent({"patient_id": patient_id, "query": "", "doctor_context": ""})
 
 
-@_xfail("F1-05")
 def test_monitor_no_duplica_alertas(monkeypatch):
     # El LLM pide dos veces la misma detección (P003 tiene una hipoglucemia en ayunas).
     analysis = _run_monitor(monkeypatch, "P003", [
@@ -239,7 +238,6 @@ def test_monitor_no_duplica_alertas(monkeypatch):
     assert len(claves) == len(set(claves)), "la misma observación no puede generar dos alertas"
 
 
-@_xfail("F1-05")
 def test_monitor_respeta_ventana_elegida(monkeypatch):
     # El LLM analiza solo los últimos 3 meses; lo que se complete debe usar la misma ventana.
     analysis = _run_monitor(monkeypatch, "P002", [

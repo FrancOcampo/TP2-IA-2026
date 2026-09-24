@@ -245,8 +245,8 @@ def _monitor_fallback(state: AgentState) -> AgentState:
     try:
         from agents.monitor import _build_analysis
 
-        # Sin resultados previos de un LLM: _build_analysis ejecuta todas las tools.
-        analysis = _build_analysis(patient_id, {}, [], [])
+        # Sin resultados previos de un LLM: _build_analysis ejecuta todas las tools (ventana global).
+        analysis = _build_analysis(patient_id)
 
         return {
             "analysis": analysis,
