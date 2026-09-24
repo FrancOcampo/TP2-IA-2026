@@ -117,3 +117,17 @@ def test_pipeline_estocastico_se_cablea(app):
     assert len(out["conversation"]) >= 2       # Monitor y Clínico aportaron mensajes
     assert 1 <= out["iteration"] <= 3          # terminó dentro del guardrail
 
+
+@pytest.mark.llm
+def test_seguimiento_estocastico_no_pisa_reporte(app):
+    """Con LLM real, la respuesta de seguimiento va a followup_answer y el reporte queda igual (F1-03)."""
+    if not has_api_key():
+        pytest.skip("requiere API key (modo estocástico)")
+
+    init = {"patient_id": "P002", "query": "Analizá al paciente", "conversation": []}
+    reporte = app.invoke(init, _cfg("t-llm-follow"))["report"]
+    out = app.invoke({"query": "¿Qué significa la HbA1c?"}, _cfg("t-llm-follow"))
+
+    assert out["is_followup"] is True
+    assert out["followup_answer"]
+    assert out["report"] == reporte

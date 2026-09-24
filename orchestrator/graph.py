@@ -27,8 +27,7 @@ def _reset_patient_scope() -> dict:
     Campos derivados de un análisis que no deben sobrevivir a un cambio de paciente o a
     un reinicio (D4). Única fuente de esta limpieza; F3-01 la reutiliza.
 
-    TODO(F1-03/F1-04/F3-02): sumar `followup_answer`, `save_result` y `refinement_request`
-    cuando existan en AgentState.
+    TODO(F1-04/F3-02): sumar `save_result` y `refinement_request` cuando existan en AgentState.
     """
     return {
         "metrics_history": None,
@@ -38,6 +37,7 @@ def _reset_patient_scope() -> dict:
         "longitudinal_comparison": None,
         "rag_context": None,
         "report": None,
+        "followup_answer": None,
         "error": None,
     }
 
@@ -69,8 +69,9 @@ def orchestrator_node(state: AgentState) -> AgentState:
         # Control del loop: se reinicia en cada mensaje nuevo del médico
         "iteration": 0,
         "information_sufficient": True,
-        # Un error de dominio de un mensaje anterior no se arrastra al siguiente
+        # Un error de dominio o una respuesta de un mensaje anterior no se arrastran
         "error": None,
+        "followup_answer": None,
         "awaiting_confirmation": confirming,
     }
     if switching or resetting:
@@ -219,6 +220,19 @@ def _clinical_fallback(state: AgentState) -> AgentState:
     patient_id = state.get("patient_id", "")
     analysis = state.get("analysis")
     iteration = state.get("iteration", 0) + 1
+
+    # Seguimiento sin LLM: no se regenera el reporte (D3); se responde en followup_answer.
+    if state.get("is_followup") and state.get("report"):
+        answer = (
+            "[Clinical fallback] Sin LLM configurado no se pueden responder preguntas de "
+            "seguimiento. El reporte de la sesión sigue disponible en el panel."
+        )
+        return {
+            "followup_answer": answer,
+            "iteration": iteration,
+            "information_sufficient": True,
+            "conversation": [{"role": "assistant", "content": answer}],
+        }
 
     # Si es P004 (datos insuficientes) y primera/segunda vuelta, marcamos información insuficiente
     # TODO(F1-06): reemplazar la comparación por id por un criterio basado en insufficient_data.

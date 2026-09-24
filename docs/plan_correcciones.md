@@ -45,7 +45,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F0-01** | [EAS-5](https://linear.app/easymetricdev/issue/EAS-5) | Tests de reproducción de bugs | — | — | ✅ |
 | **F1-01** | [EAS-6](https://linear.app/easymetricdev/issue/EAS-6) | Paciente inexistente / métricas sin datos informados como "controlado" | 🔴 Crítica | F0-01 | ✅ |
 | **F1-02** | [EAS-7](https://linear.app/easymetricdev/issue/EAS-7) | Contaminación de estado al cambiar de paciente en el mismo thread | 🔴 Crítica | F0-01 | ✅ |
-| **F1-03** | [EAS-8](https://linear.app/easymetricdev/issue/EAS-8) | La respuesta de seguimiento sobrescribe el reporte | 🟠 Alta | F0-01 | ⬜ |
+| **F1-03** | [EAS-8](https://linear.app/easymetricdev/issue/EAS-8) | La respuesta de seguimiento sobrescribe el reporte | 🟠 Alta | F0-01 | ✅ |
 | **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ⬜ |
 | **F1-05** | [EAS-10](https://linear.app/easymetricdev/issue/EAS-10) | Monitor mezcla ventanas temporales y duplica alertas | 🟠 Alta | F0-01 | ⬜ |
 | **F1-06** | [EAS-11](https://linear.app/easymetricdev/issue/EAS-11) | Suficiencia de información hardcodeada (P004) y por palabra clave | 🟠 Alta | F1-01 | ⬜ |
@@ -206,8 +206,10 @@ Clínico recibe como "reporte previo" la respuesta anterior, y "Guardar sesión"
 5. UI: sin cambios funcionales (usa el último mensaje de `conversation`), pero verificar que el panel de reporte no cambia al chatear.
 
 **Aceptación**
-- [ ] `test_seguimiento_no_pisa_reporte` pasa (determinístico) y hay un test `llm` equivalente.
-- [ ] Caso `happy_03` del eval registra la respuesta de seguimiento como `obtained`.
+- [x] `test_seguimiento_no_pisa_reporte` pasa (determinístico) y hay un test `llm` equivalente (`test_graph.py::test_seguimiento_estocastico_no_pisa_reporte`).
+- [x] `eval_runner` registra `followup_answer` como `obtained` cuando el último mensaje es un seguimiento (`is_followup`), no según tenga `setup`: un caso futuro con setup puede ser un cambio de paciente. Falta confirmarlo en una corrida de `happy_03` con LLM real.
+
+**Implementado además:** el Orquestador limpia `followup_answer` en cada mensaje y en `_reset_patient_scope()`. Sin LLM, el fallback responde el seguimiento con un aviso en `followup_answer` en vez de regenerar el reporte.
 
 ---
 
