@@ -143,7 +143,9 @@ def _run_case(case: dict) -> dict:
     analysis = (final or {}).get("analysis")
     degraded = bool(capture.messages)
     return {
-        "obtained": (final or {}).get("followup_answer" if (final or {}).get("is_followup") else "report")
+        # Un error de dominio (p. ej. paciente sin datos, ADR-0003) ES la salida que ve el médico.
+        "obtained": (final or {}).get("error")
+                    or (final or {}).get("followup_answer" if (final or {}).get("is_followup") else "report")
                     or "(sin respuesta)",
         "alerts_count": len(analysis.alerts) if analysis else None,
         "duration_s": duration,

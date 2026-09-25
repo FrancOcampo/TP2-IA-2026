@@ -144,3 +144,39 @@ def test_clinico_no_guarda_reportes_vacios(seeded_store, monkeypatch):
     monkeypatch.setattr(clinical, "_build_clinical_llm", lambda: _FakeLLM([vacio]))
     with pytest.raises(RuntimeError, match="vacía"):
         clinical.run_clinical_agent(_state_reporte())
+
+
+def test_resumen_no_muestra_tendencia_con_datos_insuficientes():
+    """eval edge_01: con 1 registro el resumen no puede decir "Δ +0 · estable"."""
+    texto = summarize_analysis(_build_analysis("P004"))
+    assert "estable" not in texto and "Δ" not in texto
+    assert texto.count("SIN tendencia evaluable") == 6
+
+
+def test_resumen_de_alertas_sin_fuente_citable():
+    """eval edge_03: la fuente del umbral no va al prompt (el LLM la citaba como fragmento)."""
+    texto = summarize_analysis(_build_analysis("P002"))
+    assert "Guía SAD" not in texto and ">= 7 %" in texto
+
+
+def test_resumen_incluye_periodo_de_datos():
+    assert "2025-01-15 a 2025-12-15" in summarize_analysis(_build_analysis("P002"), "2025-01-15 a 2025-12-15")
+
+
+def test_validacion_de_citas():
+    from agents.context import validate_citations
+
+    rag = ["[Guia_SAD_2025.md] ...con el objetivo de glucemias matinales entre 80 y 130 mg/dl..."]
+    reporte = ('Meta: “glucemias matinales entre 80 y 130 mg/dl” [Guia_SAD_2025.md]. '
+               'Otra: "Hipoglucemia, moderada: < 70 mg/dL" [guia.md].')
+    marcado, n = validate_citations(reporte, rag)
+    assert n == 1
+    assert "130 mg/dl” [Guia" in marcado, "la cita real queda intacta"
+    assert '< 70 mg/dL" ⚠️ (cita no verificada)' in marcado
+
+
+def test_resumen_incluye_metas_del_sistema():
+    """eval edge_01/edge_06: sin las metas explícitas el LLM las inventaba."""
+    texto = summarize_analysis(_build_analysis("P005"))
+    assert "HbA1c (%): alerta si severa > 9, moderada >= 7" in texto
+    assert "hipoglucemia severa < 54" in texto
