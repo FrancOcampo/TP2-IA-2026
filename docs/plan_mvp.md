@@ -73,6 +73,7 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 | F3-04 (previo) | Precisión del reporte según la evaluación: sin tendencia con datos insuficientes, período de datos explícito, fuente del umbral fuera del prompt y **validador de citas** | ✅ |
 | — | Cadena de respaldo de modelos (`gpt-oss-120b` → `gpt-oss-20b`): duplica la cuota diaria del free tier ([ADR-0016](adr/0016-cadena-de-respaldo-de-modelos.md)) | ✅ |
 | F3-06 (parcial) | La UI avisa cuando un agente cayó al fallback (cuota agotada, sin key…) en lugar de mostrar un reporte pobre sin explicación ([ADR-0018](adr/0018-modo-de-ejecucion-visible.md)) | ✅ |
+| — | OpenRouter + DeepSeek V4 Flash como proveedor real de bajo costo, `openai_compat` genérico y respaldo entre proveedores; prueba end-to-end con datos sintéticos: 28–33 s y ~0,0005 USD por análisis ([ADR-0020](adr/0020-proveedores-openai-compatibles-y-cadena-entre-proveedores.md)) | ✅ |
 | F3-05 | Contexto compacto + `AGENT_MODE=lean` (Monitor en 1 llamada, Clínico con historial precargado) + razonamiento `low` ([ADR-0015](adr/0015-modo-lean-para-free-tier.md)) | ✅ |
 
 ## Fuera del MVP

@@ -165,6 +165,9 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
     interpretación de cada grupo de alertas y `fragment_ids`; el código arma el Markdown (`agents/report.py`) con
     citas resueltas por id, cifras validadas y disclaimer siempre presente.
 
+15. **Proveedores de LLM** (ADR-0020): `groq`, `gemini`, `openrouter` y `openai_compat` (cualquier API compatible con OpenAI), con
+    cadena de respaldo entre proveedores (`LLM_FALLBACK_MODELS=proveedor:modelo`) y tiempo máximo por llamada.
+
 ## Convenciones
 
 - Match el estilo del código circundante; comentarios y prompts en español.

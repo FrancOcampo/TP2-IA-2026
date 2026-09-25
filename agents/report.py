@@ -128,17 +128,37 @@ def guideline_queries(analysis: Optional[MonitorAnalysis], doctor_context: str =
     return queries
 
 
+# Señales de que un fragmento es un tramo de bibliografía (autores, revista, año;volumen) y no contenido
+# clínico: en la evaluación con el LLM real citaba listas de referencias como si fueran respaldo.
+_REFERENCE_HINTS = re.compile(
+    r"(\bet al\b|\b(?:19|20)\d{2}\s*;\s*\d+|\bdoi\b|N Engl J Med|Diabetes Care|Lancet|JAMA|\bBMJ\b"
+    r"|\b\d{1,3}\.?\s+[A-ZÁÉÍÓÚ][\wáéíóúñ]+\s+[A-Z]{1,3}[,.]"
+    r"|Sociedad Argentina de Diabetes\.\s+Gu[ií]a|Ministerio de Salud de la Naci[oó]n\.)", re.I)
+
+
+_STRONG_REFERENCE = re.compile(
+    r"^\s*\d{1,3}\.?\s+(?:Sociedad|Ministerio|Federaci[oó]n|Asociaci[oó]n|American|World|International)\b"
+    r"|\b(?:Sociedad Argentina de Diabetes|Ministerio de Salud de la Naci[oó]n)\.\s+(?:Gu[ií]a|Recomendaciones)")
+
+
+def looks_like_references(text: str) -> bool:
+    """True si el fragmento parece bibliografía (2 señales, o 1 señal fuerte), para no ofrecerlo como respaldo."""
+    return len(_REFERENCE_HINTS.findall(text)) >= 2 or bool(_STRONG_REFERENCE.search(text))
+
+
 def prefetch_guidelines(bank: FragmentBank, queries: list[str], search, k: int = 3, max_fragments: int = 6) -> None:
     """Llena el banco con los mejores fragmentos de cada consulta (`search` = search_clinical_guidelines)."""
     for query in queries:
         for formatted in search(query, k=k):
             if len(bank.items) >= max_fragments:
                 return
-            bank.add(formatted)
+            if not looks_like_references(formatted):
+                bank.add(formatted)
 
 
 def numbered_search_result(bank: FragmentBank, fragments: list[str]) -> str:
     """Resultado de la tool `search_clinical_guidelines` con ids [F#] para que el LLM cite por número."""
+    fragments = [f for f in fragments if not looks_like_references(f)]
     if not fragments:
         return "No se encontraron fragmentos relevantes."
     return "\n\n".join(f"[F{bank.add(f)}] {f}" for f in fragments)
@@ -186,7 +206,45 @@ def _flag(text: str, context: str) -> str:
     return f"{text} ⚠️ (cifra sin respaldo en los datos: {', '.join(bad)})" if bad else text
 
 
-def _cite(fragment_ids: list[int], bank: FragmentBank) -> list[str]:
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡0-9])")
+_NOISE = re.compile(r"(?:->\s*\w\s*)+|\bR\d{1,3}\b|\bComentario\b(?=\s+R?\d)|[\u2022\u25aa\u25cf|#*_`>]+")
+
+
+def _words(text: str) -> set[str]:
+    import unicodedata
+
+    plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    return {w for w in re.findall(r"[a-z0-9]{4,}", plain)}
+
+
+def best_excerpt(text: str, hint: str = "", max_chars: int = _QUOTE_CHARS) -> str:
+    """
+    Extracto citable de un fragmento: oraciones COMPLETAS (el fragmento empieza y termina en cortes
+    arbitrarios del texto), sin marcas de la extracción del PDF, y la más pertinente a `hint` (la
+    interpretación que respalda). Devuelve "" si no queda ninguna oración utilizable.
+    """
+    clean = re.sub(r"\s+", " ", _NOISE.sub(" ", text)).strip()
+    parts = _SENTENCE_SPLIT.split(clean)
+    # Si el fragmento arranca a mitad de oración (minúscula), esa primera parte está cortada.
+    if len(parts) > 1 and parts[0][:1].islower():
+        parts = parts[1:]
+    parts = [p.strip() for p in parts if len(p.strip()) >= 40 and len(p.split()) >= 6 and not looks_like_references(p)]
+    # La última oración puede estar cortada por el límite del fragmento.
+    if parts and not parts[-1].endswith((".", "!", "?", ")")) and len(parts) > 1:
+        parts = parts[:-1]
+    if not parts:
+        return ""
+    target = _words(hint)
+    scored = sorted(range(len(parts)), key=lambda i: (-len(_words(parts[i]) & target), i))
+    chosen = [scored[0]]
+    # Suma la oración siguiente si entra, para que la cita tenga contexto.
+    if scored[0] + 1 < len(parts) and len(parts[scored[0]]) + len(parts[scored[0] + 1]) + 1 <= max_chars:
+        chosen.append(scored[0] + 1)
+    excerpt = " ".join(parts[i] for i in sorted(chosen))
+    return excerpt if len(excerpt) <= max_chars else excerpt[:max_chars].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def _cite(fragment_ids: list[int], bank: FragmentBank, hint: str = "") -> list[str]:
     lines = []
     for fid in dict.fromkeys(fragment_ids):
         item = bank.get(fid)
@@ -194,8 +252,8 @@ def _cite(fragment_ids: list[int], bank: FragmentBank) -> list[str]:
             lines.append(f"  - ⚠️ cita no verificada: el fragmento F{fid} no existe")
             continue
         source, text = item
-        quote = re.sub(r"\s+", " ", text)[:_QUOTE_CHARS].rstrip()
-        lines.append(f"  - «{quote}…» — [{source}]")
+        quote = best_excerpt(text, hint)
+        lines.append(f"  - «{quote}» — [{source}]" if quote else f"  - (fragmento F{fid} sin texto citable) — [{source}]")
     return lines
 
 
@@ -243,7 +301,7 @@ def render_report(
             out.append("- Interpretación: (el modelo no interpretó este grupo)")
             continue
         out.append(f"- Interpretación: {_flag(item.interpretation, context)}")
-        out += _cite(item.fragment_ids, bank) or ["  - (sin cita de guía para este hallazgo)"]
+        out += _cite(item.fragment_ids, bank, item.interpretation) or ["  - (sin cita de guía para este hallazgo)"]
 
     if report.trends:
         out += ["", sec("Tendencias relevantes")] + [f"- {_flag(t, context)}" for t in report.trends]
