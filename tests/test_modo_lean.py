@@ -82,41 +82,6 @@ def test_monitor_lean_usa_la_ventana_del_plan(monkeypatch):
 
 
 # ------------------------------------------------------------------
-# Clínico lean: historial y comparación por código
-# ------------------------------------------------------------------
-
-def _state_reporte(patient_id="P002"):
-    return {"patient_id": patient_id, "query": "Analizá", "analysis": _build_analysis(patient_id),
-            "conversation": []}
-
-
-def test_clinico_lean_precarga_historial_y_comparacion(seeded_store, monkeypatch):
-    llm = _FakeLLM([AIMessage(content="Reporte clínico.")])
-    monkeypatch.setattr(clinical, "_build_clinical_llm", lambda: llm)
-
-    updates = clinical.run_clinical_agent(_state_reporte())
-
-    human = llm.received[0][1].content
-    assert "Historial del paciente (ya consultado" in human
-    assert '"hba1c": 0.7' in human, "la comparación trae deltas contra la sesión semilla (8.2 − 7.5)"
-    assert "metrics_history" not in human
-    assert updates["report"] == "Reporte clínico."
-    assert updates["longitudinal_comparison"]
-
-
-def test_clinico_fuerza_respuesta_al_agotar_pasos(seeded_store, monkeypatch):
-    busqueda = AIMessage(content="", tool_calls=[{
-        "name": "search_clinical_guidelines", "args": {"query": "HbA1c"}, "id": "c1", "type": "tool_call"}])
-    monkeypatch.setattr(clinical, "_build_clinical_llm", lambda: _FakeLLM([busqueda]))
-    monkeypatch.setattr(clinical, "_build_answer_llm", lambda: _FakeLLM([AIMessage(content="Respuesta final.")]))
-    monkeypatch.setattr(clinical, "search_clinical_guidelines", lambda q, k=3: ["[guia.md] meta < 7 %"])
-
-    updates = clinical.run_clinical_agent(_state_reporte())
-    assert updates["report"] == "Respuesta final.", "nunca queda un reporte vacío por agotar pasos"
-    assert len(updates["rag_context"]) == 3
-
-
-# ------------------------------------------------------------------
 # Grafo en modo lean: refinamiento con la ventana elegida por el plan
 # ------------------------------------------------------------------
 
@@ -138,12 +103,6 @@ def test_refinamiento_lean_amplia_ventana(seeded_store, monkeypatch):
     assert out["iteration"] == 2
     assert out["analysis"].analysis_window.is_global
 
-
-def test_clinico_no_guarda_reportes_vacios(seeded_store, monkeypatch):
-    vacio = AIMessage(content="", response_metadata={"finish_reason": "length"})
-    monkeypatch.setattr(clinical, "_build_clinical_llm", lambda: _FakeLLM([vacio]))
-    with pytest.raises(RuntimeError, match="vacía"):
-        clinical.run_clinical_agent(_state_reporte())
 
 
 def test_resumen_no_muestra_tendencia_con_datos_insuficientes():

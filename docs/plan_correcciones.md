@@ -60,7 +60,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F3-01** | [EAS-20](https://linear.app/easymetricdev/issue/EAS-20) | Orquestador con salida estructurada del LLM (+ nodo de aclaración) | 🟠 Alta | F1-02, F1-04 | ⬜ |
 | **F3-02** | [EAS-21](https://linear.app/easymetricdev/issue/EAS-21) | Loop de refinamiento real: suficiencia estructurada + pedido concreto al Monitor | 🟠 Alta | F1-05, F1-06 | ⬜ |
 | **F3-03** | [EAS-22](https://linear.app/easymetricdev/issue/EAS-22) | Flags del Monitor coherentes y notas del plan del LLM | 🟡 Media | F1-05 | ⬜ |
-| **F3-04** | [EAS-23](https://linear.app/easymetricdev/issue/EAS-23) | Reporte clínico estructurado, citas validadas y disclaimer por código | 🟠 Alta | F2-05 | 🟨 (validador de citas adelantado al MVP) |
+| **F3-04** | [EAS-23](https://linear.app/easymetricdev/issue/EAS-23) | Reporte clínico estructurado, citas validadas y disclaimer por código | 🟠 Alta | F2-05 | ✅ (ADR-0019; validación con LLM real pendiente de cuota) |
 | **F3-05** | [EAS-24](https://linear.app/easymetricdev/issue/EAS-24) | Contexto del modo seguimiento compacto | 🟢 Baja | F1-03 | ✅ (adelantado al MVP, ADR-0015) |
 | **F3-06** | [EAS-25](https://linear.app/easymetricdev/issue/EAS-25) | Robustez de tools y marca de modo de ejecución en el estado | 🟡 Media | — | 🟨 (`execution_mode` + aviso en la UI, ADR-0018; respuesta forzada ya hecha) |
 | **F3-07** | [EAS-26](https://linear.app/easymetricdev/issue/EAS-26) | Campo "Orientación del análisis" en la UI | 🟢 Baja | F3-01 | ⬜ |
@@ -567,8 +567,10 @@ El wrapper solo recibe `query` ([clinical.py:59-66](../agents/clinical.py#L59));
 5. `suggested_questions` se persiste en `save_node` (F1-04).
 
 **Aceptación**
-- [ ] Test determinístico: todo reporte y toda respuesta de seguimiento renderizados terminan con el disclaimer.
-- [ ] Test unitario del validador de citas (cita presente / inventada).
+- [x] Todo reporte, respuesta de seguimiento y fallback termina con el disclaimer, agregado por código (`tests/test_reporte_estructurado.py`).
+- [x] Validador de citas por id (existente / inexistente) y de cifras sin respaldo.
+
+**Decisión registrada:** [ADR-0019](adr/0019-reporte-estructurado-y-generacion-anclada.md). Diferencia con lo previsto: la cita es un `fragment_id` que se resuelve contra el banco de fragmentos (no un texto que escribe el LLM), y se agregó un validador de cifras con unidad para detectar metas inventadas.
 
 ---
 
@@ -657,7 +659,7 @@ Ver §9.
 | `AgentState` | `+ followup_answer: Optional[str]` | F1-03 |
 | `AgentState` | `awaiting_confirmation` → `save_requested: bool`; `+ save_result: Optional[dict]`; `+ analysis_query: Optional[str]` | F1-04 |
 | `AgentState` | `+ refinement_request: Optional[list[RefinementRequest]]` | F3-02 |
-| `AgentState` | `+ report_structured: Optional[ClinicalReport]` | F3-04 |
+| `AgentState` | `+ report_structured: Optional[dict]` (`ClinicalReport` serializado) ✅ | F3-04 |
 | `AgentState` | `+ execution_mode: dict[str, str]` ✅ (ADR-0018) | F3-06 |
 | `AgentState` | `longitudinal_comparison: Optional[dict[str, dict]]` (estructurado por métrica) | F2-04 |
 | `MonitorAnalysis` | `*_stats: Optional[MetricStats]`; `+ insufficient_data: dict[str, str]`; `+ records_count: int` | F1-01 |

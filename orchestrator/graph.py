@@ -16,6 +16,7 @@ from orchestrator.router import (
     extract_patient_id,
 )
 from agents.context import metrics_summary
+from agents.report import ensure_disclaimer
 from agents.llm_factory import has_api_key
 from tools.history_tools import update_patient_history
 from tools.patient_tools import load_patient_data
@@ -58,6 +59,7 @@ def _reset_patient_scope() -> dict:
         "longitudinal_comparison": None,
         "rag_context": None,
         "report": None,
+        "report_structured": None,
         "followup_answer": None,
         "analysis_query": None,
         "save_result": None,
@@ -141,7 +143,8 @@ def build_session_data(state: AgentState) -> dict:
         "alerts": [a.model_dump(mode="json") for a in analysis.alerts],
         "metrics_summary": metrics_summary(analysis),
         "longitudinal_comparison": state.get("longitudinal_comparison"),
-        "suggested_questions": [],  # TODO(F3-04): preguntas sugeridas del reporte estructurado
+        "suggested_questions": (state.get("report_structured") or {}).get("suggested_questions", []),
+        "execution_mode": state.get("execution_mode") or {},
     }
 
 
@@ -350,9 +353,10 @@ def _clinical_fallback(state: AgentState, reason: str = "error") -> AgentState:
     # Seguimiento sin LLM: no se regenera el reporte (D3); se responde en followup_answer.
     if state.get("is_followup") and state.get("report"):
         answer = (
-            "[Clinical fallback] Sin LLM configurado no se pueden responder preguntas de "
+            "[Clinical fallback] Sin LLM disponible no se pueden responder preguntas de "
             "seguimiento. El reporte de la sesión sigue disponible en el panel."
         )
+        answer = ensure_disclaimer(answer)
         return {
             "followup_answer": answer,
             "iteration": iteration,
@@ -386,8 +390,10 @@ def _clinical_fallback(state: AgentState, reason: str = "error") -> AgentState:
         else:
             report += "No hay análisis de monitor disponible."
 
+    report = ensure_disclaimer(report)
     return {
         "report": report,
+        "report_structured": None,
         "iteration": iteration,
         "information_sufficient": information_sufficient,
         "execution_mode": mode,

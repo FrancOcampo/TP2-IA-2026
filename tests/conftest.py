@@ -14,6 +14,20 @@ load_dotenv()
 
 
 @pytest.fixture(autouse=True)
+def _sin_llm_real(request, monkeypatch):
+    """
+    Los tests no marcados `llm` NUNCA llaman a la API real: sin keys en el entorno y sin que un import tardío
+    (p. ej. interface.app, que hace load_dotenv al importarse) las vuelva a cargar desde .env. Sin esto, un test
+    que se olvidaba de simular el LLM gastaba cuota de Groq y fallaba de forma intermitente con 429.
+    """
+    if request.node.get_closest_marker("llm"):
+        return
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)
+    for var in ("GROQ_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _history_store_temporal(tmp_path, monkeypatch):
     """
     Cada test usa un historial SQLite propio y vacío: nunca escribe en data/tp2.db

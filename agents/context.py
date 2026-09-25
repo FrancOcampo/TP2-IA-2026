@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 
 from orchestrator.state import Alert, MetricStats, MonitorAnalysis
@@ -45,26 +47,76 @@ def _stats_line(metric: str, stats: Optional[MetricStats], insufficient: Optiona
             f"mín {_fmt(stats.min_value)} · máx {_fmt(stats.max_value)}")
 
 
-def _alert_groups(alerts: list[Alert]) -> list[str]:
-    """Una línea por (métrica, lado): cantidad, período, peor valor y umbral vulnerado."""
-    groups: dict[tuple[str, bool], list[Alert]] = {}
+_SEVERITY_RANK = {"severa": 0, "moderada": 1}
+_METRIC_ORDER = ["hba1c", "glucose_fasting", "glucose_postprandial"]
+
+
+@dataclass(frozen=True)
+class AlertGroup:
+    """Alertas de una misma métrica y lado (alta / hipoglucemia), con id estable A1, A2…"""
+    id: str
+    metric: str
+    is_hypo: bool
+    count: int
+    severities: tuple[str, ...]
+    severity_rank: int      # 0 = tiene alguna severa
+    first: date
+    last: date
+    worst_value: float
+    threshold: str          # umbral vulnerado del peor valor, sin la fuente
+
+    @property
+    def label(self) -> str:
+        return _METRIC_LABELS.get(self.metric, (self.metric, ""))[0]
+
+    @property
+    def unit(self) -> str:
+        return _METRIC_LABELS.get(self.metric, (self.metric, ""))[1]
+
+    @property
+    def title(self) -> str:
+        return f"{self.label}{' (hipoglucemia)' if self.is_hypo else ''}"
+
+    @property
+    def period(self) -> str:
+        return self.first.isoformat() if self.first == self.last else f"{self.first.isoformat()} a {self.last.isoformat()}"
+
+    @property
+    def finding(self) -> str:
+        return (f"{self.count} registro(s) [{', '.join(self.severities)}], {self.period}; "
+                f"peor valor {_fmt(self.worst_value)} {self.unit} ({self.threshold})")
+
+
+def alert_groups(alerts: list[Alert]) -> list[AlertGroup]:
+    """
+    Agrupa las alertas por (métrica, lado) y les asigna ids A1, A2… en orden estable: primero los
+    grupos con alertas severas, después por métrica. Es la vista que ven el LLM y el reporte.
+    """
+    raw: dict[tuple[str, bool], list[Alert]] = {}
     for a in alerts:
-        groups.setdefault((a.metric, "hipoglucemia" in a.description), []).append(a)
-    lines = []
-    for (metric, is_hypo), group in groups.items():
-        label, unit = _METRIC_LABELS.get(metric, (metric, ""))
+        raw.setdefault((a.metric, "hipoglucemia" in a.description), []).append(a)
+    built = []
+    for (metric, is_hypo), group in raw.items():
         worst = min(group, key=lambda a: a.value) if is_hypo else max(group, key=lambda a: a.value)
-        severities = sorted({a.severity for a in group})
         dates = sorted(a.date for a in group)
-        period = dates[0].isoformat() if len(dates) == 1 else f"{dates[0].isoformat()} a {dates[-1].isoformat()}"
-        # Umbral vulnerado del peor valor, SIN la fuente: el LLM la citaba como si fuera un
-        # fragmento recuperado de la guía (eval edge_03). Las citas salen solo del RAG.
-        detail = worst.description.split("(", 1)[-1].rstrip(")").split(";", 1)[0]
-        lines.append(
-            f"- {label}{' (hipoglucemia)' if is_hypo else ''}: {len(group)} registro(s) "
-            f"[{', '.join(severities)}], {period}; peor valor {_fmt(worst.value)} {unit} ({detail})"
-        )
-    return lines
+        # Umbral del peor valor SIN la fuente: el LLM la citaba como si fuera un fragmento recuperado.
+        threshold = worst.description.split("(", 1)[-1].rstrip(")").split(";", 1)[0]
+        severities = tuple(sorted({a.severity for a in group}, key=lambda s: _SEVERITY_RANK.get(s, 9)))
+        built.append((metric, is_hypo, len(group), severities, dates[0], dates[-1], worst.value, threshold))
+    order = lambda g: (_SEVERITY_RANK.get(g[3][0], 9), _METRIC_ORDER.index(g[0]) if g[0] in _METRIC_ORDER else 9, g[1])
+    return [
+        AlertGroup(f"A{i}", m, h, n, sev, sev_rank_of(sev), f, l, w, th)
+        for i, (m, h, n, sev, f, l, w, th) in enumerate(sorted(built, key=order), start=1)
+    ]
+
+
+def sev_rank_of(severities: tuple[str, ...]) -> int:
+    return _SEVERITY_RANK.get(severities[0], 9) if severities else 9
+
+
+def _alert_groups(alerts: list[Alert]) -> list[str]:
+    """Una línea por grupo, con su id, para el prompt del Clínico."""
+    return [f"- {g.id} · {g.title}: {g.finding}" for g in alert_groups(alerts)]
 
 
 def control_targets() -> str:

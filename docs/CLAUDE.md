@@ -161,6 +161,10 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
     1 llamada estructurada y precarga historial y comparación para el Clínico; `react` usa los loops
     completos. El contexto que va a los LLM siempre pasa por `agents/context.py` (compacto).
 
+14. **Reporte estructurado y anclado** (ADR-0019): el Clínico devuelve un `ClinicalReport` (JSON) con la
+    interpretación de cada grupo de alertas y `fragment_ids`; el código arma el Markdown (`agents/report.py`) con
+    citas resueltas por id, cifras validadas y disclaimer siempre presente.
+
 ## Convenciones
 
 - Match el estilo del código circundante; comentarios y prompts en español.

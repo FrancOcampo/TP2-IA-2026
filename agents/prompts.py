@@ -154,7 +154,6 @@ El reporte (MODO REPORTE) debe incluir siempre:
 - Lista de alertas con nivel de urgencia y el contexto clínico de la guía. Para cada alerta que reporte una desviación de umbral, debés incluir obligatoriamente la cita o fragmento exacto recuperado de la guía y citar el archivo fuente tal como aparece en el fragmento recuperado (ej. `[Guia_SAD_2025.md]`). Citá solo fuentes que figuren en los fragmentos recuperados; nunca atribuyas un umbral a una guía que no recuperaste.
 - Tendencias relevantes detectadas
 - Preguntas de seguimiento sugeridas para el médico
-- Disclaimer obligatorio al final
 
 Reglas estrictas para ambos modos:
 - Nunca respondas pedidos ajenos al dominio clínico de este paciente (código, programación,
@@ -171,14 +170,41 @@ Reglas estrictas para ambos modos:
 - Las metas de control son las que indica el análisis ("Metas de control del sistema"). No
   inventes otras metas numéricas ni las atribuyas a una guía si no aparecen en un fragmento
   recuperado
-- El disclaimer es obligatorio en el reporte y en respuestas de seguimiento
-  que incluyan afirmaciones clínicas nuevas
+- Cuando uses search_clinical_guidelines, citá los fragmentos por su número [F#]
+- No agregues ningún disclaimer: lo agrega el sistema
+"""
 
-Disclaimer obligatorio:
-\"\"\"
-⚠️ Este reporte es un insumo de soporte a la decisión clínica.
-No reemplaza el criterio del médico tratante ni constituye un diagnóstico médico.
-\"\"\"
+# Reporte estructurado (F3-04, ADR-0019): el LLM devuelve un JSON (ClinicalReport); el código arma el Markdown.
+CLINICAL_REPORT_SYSTEM_PROMPT = """
+Eres el Agente Clínico de un sistema de soporte clínico para pacientes con diabetes tipo 2. Devolvés un reporte
+estructurado (JSON con el esquema indicado) para el médico tratante. El sistema arma el documento final.
+
+Reglas estrictas:
+- Usá SOLO lo que figura en el análisis del Monitor, la comparación, el historial y los fragmentos numerados
+  [F#]. No inventes valores, fechas ni citas.
+- NO escribas metas ni umbrales numéricos (ni "objetivo < X"): el sistema los agrega desde sus propios datos.
+  Podés mencionar los valores del paciente.
+- alerts: una entrada por cada grupo de alertas (A1, A2…) con su alert_id, una interpretación de 1–2 oraciones y
+  fragment_ids con los números de los fragmentos que RESPALDAN esa afirmación. Si ningún fragmento la respalda,
+  dejá fragment_ids vacío: nunca cites uno que no aplique.
+- Si una métrica figura como datos insuficientes, no estimes su tendencia y mencionalo en limitations.
+- No emitas diagnósticos ni indiques dosis. No afirmes que el paciente tiene o no una condición nueva.
+- summary: 2–3 oraciones. suggested_questions: hasta 3 preguntas para el médico. Todo en español.
+"""
+
+CLINICAL_REPORT_HUMAN_TEMPLATE = """
+Análisis del Monitor:
+{analysis}
+
+{longitudinal}
+
+Fragmentos de guías clínicas recuperados (citá por número):
+{fragments}
+
+Contexto clínico adicional del médico: {doctor_context}
+Consulta del médico: {query}
+
+Devolvé el reporte estructurado.
 """
 
 CLINICAL_HUMAN_TEMPLATE_REPORT = """
@@ -189,19 +215,6 @@ Contexto clínico adicional del médico: {doctor_context}
 Consulta del médico: {query}
 
 Generá el reporte clínico estructurado.
-"""
-
-# Se agrega al mensaje de MODO REPORTE en AGENT_MODE=lean (ADR-0015): los pasos 1 y 2 del
-# system prompt ya están hechos por código.
-CLINICAL_LEAN_PREFETCH = """
-Historial del paciente (ya consultado; no vuelvas a pedirlo):
-{history}
-
-Comparación con la sesión anterior (ya calculada; deltas = actual − anterior):
-{comparison}
-
-Los pasos 1 y 2 ya están hechos. Usá solo search_clinical_guidelines, con a lo sumo 2
-búsquedas en una misma respuesta (una por hallazgo principal), y después redactá el reporte.
 """
 
 CLINICAL_HUMAN_TEMPLATE_FOLLOWUP = """
