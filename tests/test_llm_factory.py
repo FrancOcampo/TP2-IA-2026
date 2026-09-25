@@ -66,6 +66,8 @@ def test_cadena_de_respaldo_de_modelos(monkeypatch):
     llm = build_llm()
     assert llm.runnable.model_name == "openai/gpt-oss-120b"
     assert [f.model_name for f in llm.fallbacks] == ["openai/gpt-oss-20b"]
+    assert llm.runnable.max_retries == 1, "el principal pasa rápido al respaldo"
+    assert llm.fallbacks[0].max_retries > 1, "el último de la cadena espera y reintenta"
 
     monkeypatch.setenv("LLM_FALLBACK_MODELS", "")
     assert not hasattr(build_llm(), "fallbacks"), "LLM_FALLBACK_MODELS vacío = sin respaldo"

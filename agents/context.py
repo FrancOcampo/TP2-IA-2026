@@ -37,9 +37,12 @@ def _stats_line(metric: str, stats: Optional[MetricStats], insufficient: Optiona
         # Sin Δ ni dirección: con 1 registro "Δ +0 · estable" invitaba al LLM a afirmar una
         # estabilidad que no se puede observar (eval edge_01, ADR-0003).
         return f"- {label} ({unit}): último {_fmt(stats.last_value)} · SIN tendencia evaluable ({insufficient})"
-    return (f"- {label} ({unit}): último {_fmt(stats.last_value)} · media {_fmt(round(stats.mean, 1))} · "
-            f"mín {_fmt(stats.min_value)} · máx {_fmt(stats.max_value)} · "
-            f"Δ {stats.delta:+g} · {stats.direction}")
+    # Primer valor calculado acá: con solo "último" y "Δ" el LLM hacía la cuenta al revés y
+    # reportaba "88 → 84 kg" cuando era 92 → 88 (eval edge_06). El LLM no calcula nada.
+    first = round(stats.last_value - stats.delta, 2)
+    return (f"- {label} ({unit}): primero {_fmt(first)} → último {_fmt(stats.last_value)} "
+            f"(Δ {stats.delta:+g}, {stats.direction}) · media {_fmt(round(stats.mean, 1))} · "
+            f"mín {_fmt(stats.min_value)} · máx {_fmt(stats.max_value)}")
 
 
 def _alert_groups(alerts: list[Alert]) -> list[str]:

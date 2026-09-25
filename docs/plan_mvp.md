@@ -84,7 +84,7 @@ Estado al 2026-09-24: M1, M2 y M3 hechos y mergeados en `develop` (sin push). Ga
 
 | # | Pendiente | Quién | Bloquea |
 |---|---|---|---|
-| 1 | ~~API key de LLM~~ ✅ Groq configurada. **Falta la corrida final de MVP-06 (EAS-38)** con cuota disponible (el free tier da 200k tokens/día por modelo; se agotaron en el diagnóstico del 2026-09-25). Correr de a un caso: `uv run python tests/eval_runner.py --case <id>` (12 casos, `--list`). Última corrida válida: 9/9 sin degradar con `gpt-oss-20b`; los 4 problemas de precisión que mostró ya están corregidos | Franco | Cierre del MVP |
+| 1 | ~~API key de LLM~~ ✅ Groq configurada. **MVP-06 (EAS-38), corrida del 2026-09-25:** 9 de 12 casos con el LLM real (happy_01–03, edge_01–04, edge_06) + adv_03 sin LLM, todos correctos en lo clínico (alertas, deltas, hipoglucemia, cambio de paciente, datos insuficientes). Las cifras mal calculadas de edge_06 ya están corregidas. **Faltan adv_01, adv_02 y adv_04** (se agotó la cuota diaria de ambos modelos): `uv run python tests/eval_runner.py --case adv_01` (y adv_02, adv_04) | Franco | Cierre del MVP |
 | 2 | ~~Autorizar Linear y sincronizar~~ ✅ 2026-09-24: EAS-6…11, 18, 19, 27, 30 en Done; EAS-12, 17, 29 en In Progress (con lo que falta comentado); MVP-01…06 = EAS-33…38 | Franco | — |
 | 3 | **Validación clínica 🩺** de la tabla de metas de control ([ADR-0011](adr/0011-metas-de-control-dm2.md)), dejando fecha y quién en F2-01 | Equipo | Cierre formal de F2-01 |
 | 4 | **Contenido ADA**: decidir si se incorporan las secciones 2/6/9/10 de los *Standards 2024* (derechos de autor) o se quitan las menciones a ADA del artículo ([ADR-0013](adr/0013-corpus-sin-ada-y-huella-del-indice.md)) | Equipo | Cierre de F2-06 |

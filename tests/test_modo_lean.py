@@ -180,3 +180,10 @@ def test_resumen_incluye_metas_del_sistema():
     texto = summarize_analysis(_build_analysis("P005"))
     assert "HbA1c (%): alerta si severa > 9, moderada >= 7" in texto
     assert "hipoglucemia severa < 54" in texto
+
+
+def test_resumen_da_primero_y_ultimo_ya_calculados():
+    """eval edge_06: el LLM invertía la cuenta con último + Δ. P005: peso 92 → 88, PA sistólica 138 → 145."""
+    texto = summarize_analysis(_build_analysis("P005"))
+    assert "Peso (kg): primero 92 → último 88 (Δ -4, bajando)" in texto
+    assert "PA sistólica (mmHg): primero 138 → último 145 (Δ +7, subiendo)" in texto

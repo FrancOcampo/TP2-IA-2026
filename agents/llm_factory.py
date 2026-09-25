@@ -55,7 +55,13 @@ def build_llm(tools: list[Any] | None = None, structured_output: Any = None):
     provider, model = active_model()
     build = _build_gemini if provider == "gemini" else _build_groq
     chain = [model] + [m for m in fallback_models() if m != model]
-    runnables = [_configure(build(m), tools, structured_output) for m in chain]
+    # Los modelos intermedios reintentan una vez para pasar rápido al respaldo; el ÚLTIMO de la
+    # cadena reintenta más (respetando el retry-after del proveedor): si falla, no queda a quién
+    # pasar. Sin esto, un pico de tokens/minuto en el respaldo degradaba el caso (eval edge_04).
+    runnables = [
+        _configure(build(m, retries=1 if i < len(chain) - 1 else LAST_MODEL_RETRIES), tools, structured_output)
+        for i, m in enumerate(chain)
+    ]
     if len(runnables) == 1:
         return runnables[0]
     return runnables[0].with_fallbacks(runnables[1:], exceptions_to_handle=_fallback_exceptions())
@@ -153,15 +159,17 @@ def generation_kwargs(model: str) -> dict:
     return kwargs
 
 
-def _build_groq(model: str):
+LAST_MODEL_RETRIES = 4
+
+
+def _build_groq(model: str, retries: int = 1):
     from langchain_groq import ChatGroq
 
-    # max_retries=1: ante una cuota agotada conviene pasar rápido al modelo de respaldo.
-    return ChatGroq(model=model, temperature=0, api_key=_api_key(), max_retries=1,
+    return ChatGroq(model=model, temperature=0, api_key=_api_key(), max_retries=retries,
                     **generation_kwargs(model))
 
 
-def _build_gemini(model: str):
+def _build_gemini(model: str, retries: int = 1):
     from langchain_google_genai import ChatGoogleGenerativeAI
 
-    return ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=_api_key())
+    return ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=_api_key(), max_retries=retries)
