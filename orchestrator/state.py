@@ -172,6 +172,7 @@ class AgentState(TypedDict):
     # has_report se deriva de (report is not None) al formatear el template del Orquestador
     report: Optional[str]           # reporte de la sesión: SOLO lo escribe el modo reporte (D3)
     followup_answer: Optional[str]  # respuesta del modo seguimiento; nunca pisa `report` (D3)
+    report_structured: Optional[dict]  # ClinicalReport (agents/report.py) serializado; alimenta el guardado (F3-04)
 
     # -- Control del grafo --
     iteration: int        # contador para el guardrail (máx 3)
