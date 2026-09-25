@@ -154,8 +154,8 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
     central en el seguimiento de un diabético y antes el sistema era ciego a ellas.
 12. **Metas de control, no criterios diagnósticos** (D1, ADR-0011): todos los pacientes ya tienen
     DM2, así que la banda alta usa metas de control (HbA1c ≥ 7 / > 9, ayunas > 130 / > 300,
-    postprandial ≥ 180 / > 300). Cada banda declara comparador y fuente. 🩺 Pendiente de
-    validación clínica del equipo.
+    postprandial ≥ 180 / > 300). Cada banda declara comparador y fuente. Validada por el
+    equipo el 2026-09-25.
 
 13. **Modo de los agentes** (ADR-0015): `AGENT_MODE=lean` (default, free tier) hace el Monitor en
     1 llamada estructurada y precarga historial y comparación para el Clínico; `react` usa los loops
