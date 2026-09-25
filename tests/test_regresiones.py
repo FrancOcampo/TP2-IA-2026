@@ -231,8 +231,8 @@ def _run_monitor(monkeypatch, patient_id: str, tool_calls: list[dict]):
 def test_monitor_no_duplica_alertas(monkeypatch):
     # El LLM pide dos veces la misma detección (P003 tiene una hipoglucemia en ayunas).
     analysis = _run_monitor(monkeypatch, "P003", [
-        _tool_call("tool_detect_threshold_violations", "c1", patient_id="P003", metric="glucose_fasting"),
-        _tool_call("tool_detect_threshold_violations", "c2", patient_id="P003", metric="glucose_fasting"),
+        _tool_call("detect_threshold_violations", "c1", patient_id="P003", metric="glucose_fasting"),
+        _tool_call("detect_threshold_violations", "c2", patient_id="P003", metric="glucose_fasting"),
     ])
 
     claves = [(a.metric, a.date, a.value) for a in analysis.alerts]
@@ -242,8 +242,8 @@ def test_monitor_no_duplica_alertas(monkeypatch):
 def test_monitor_respeta_ventana_elegida(monkeypatch):
     # El LLM analiza solo los últimos 3 meses; lo que se complete debe usar la misma ventana.
     analysis = _run_monitor(monkeypatch, "P002", [
-        _tool_call("tool_calculate_stats", "c1", patient_id="P002", metric="hba1c", last_n_months=3),
-        _tool_call("tool_detect_threshold_violations", "c2", patient_id="P002", metric="hba1c", last_n_months=3),
+        _tool_call("calculate_stats", "c1", patient_id="P002", metric="hba1c", last_n_months=3),
+        _tool_call("detect_threshold_violations", "c2", patient_id="P002", metric="hba1c", last_n_months=3),
     ])
 
     inicio_ventana = date(2025, 10, 15)  # P002: registros mensuales de 2025; últimos 3 = oct–dic
