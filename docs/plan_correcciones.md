@@ -49,12 +49,12 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F1-04** | [EAS-9](https://linear.app/easymetricdev/issue/EAS-9) | "Guardar sesión" no persiste; "si"/"yes" disparan guardado | 🟠 Alta | F0-01 | ✅ |
 | **F1-05** | [EAS-10](https://linear.app/easymetricdev/issue/EAS-10) | Monitor mezcla ventanas temporales y duplica alertas | 🟠 Alta | F0-01 | ✅ |
 | **F1-06** | [EAS-11](https://linear.app/easymetricdev/issue/EAS-11) | Suficiencia de información hardcodeada (P004) y por palabra clave | 🟠 Alta | F1-01 | ✅ |
-| **F2-01** | [EAS-12](https://linear.app/easymetricdev/issue/EAS-12) | Umbrales diagnósticos usados como umbrales de control 🩺 | 🔴 Crítica | — | ✅ implementado · 🩺 validación pendiente |
+| **F2-01** | [EAS-12](https://linear.app/easymetricdev/issue/EAS-12) | Umbrales diagnósticos usados como umbrales de control 🩺 | 🔴 Crítica | — | ✅ (validado 2026-09-25) |
 | **F2-02** | [EAS-13](https://linear.app/easymetricdev/issue/EAS-13) | Umbrales de presión arterial y variación de peso 🩺 | 🟡 Media | F2-01 | ⬜ |
 | **F2-03** | [EAS-14](https://linear.app/easymetricdev/issue/EAS-14) | Alertas trazables (umbral explícito) y agrupadas por episodio | 🟡 Media | F2-01 | ⬜ |
 | **F2-04** | [EAS-15](https://linear.app/easymetricdev/issue/EAS-15) | `compare_with_previous_sessions` no compara ni clasifica | 🟠 Alta | F1-04 | ⬜ |
 | **F2-05** | [EAS-16](https://linear.app/easymetricdev/issue/EAS-16) | `search_clinical_guidelines` sin parámetro de contexto | 🟡 Media | F2-06 | ⬜ |
-| **F2-06** | [EAS-17](https://linear.app/easymetricdev/issue/EAS-17) | Corpus ADA 2024 vacío (solo introducción) + ingesta no idempotente | 🟠 Alta | — | 🟨 (2 y 3 ✅; ADA excluida del corpus, contenido pendiente) |
+| **F2-06** | [EAS-17](https://linear.app/easymetricdev/issue/EAS-17) | Corpus ADA 2024 vacío (solo introducción) + ingesta no idempotente | 🟠 Alta | — | 🟨 (2 y 3 ✅; decisión 2026-09-25: se incorpora ADA, contenido pendiente) |
 | **F2-07** | [EAS-18](https://linear.app/easymetricdev/issue/EAS-18) | Documento del paciente sin diagnósticos/comorbilidades; sesiones previas de ejemplo | 🟡 Media | F1-04 | ✅ |
 | **F2-08** | [EAS-19](https://linear.app/easymetricdev/issue/EAS-19) | Conexiones MongoDB sin reutilizar / sin cerrar | 🟢 Baja | — | ✅ (MVP-01) |
 | **F3-01** | [EAS-20](https://linear.app/easymetricdev/issue/EAS-20) | Orquestador con salida estructurada del LLM (+ nodo de aclaración) | 🟠 Alta | F1-02, F1-04 | ⬜ |
@@ -336,7 +336,7 @@ P003 (HbA1c 6.1, buen control) produce 12 alertas "moderadas"; P002 produce 34.
 **Aceptación**
 - [x] Tests de `test_monitor_tools.py` actualizados (límites exactos parametrizados por banda y comparador, P002 = 17 moderadas, severas en P005).
 - [x] Tabla de pacientes del README actualizada.
-- [ ] El equipo validó la tabla 🩺 (dejar constancia en esta sección: fecha + quién).
+- [x] El equipo validó la tabla 🩺 — **2026-09-25, Franco Ocampo**: aprobada tal como está implementada, incluido que los valores de 70–80 mg/dL en ayunas no generan alerta.
 
 **Decisión registrada:** [ADR-0011](adr/0011-metas-de-control-dm2.md). Las expectativas con los datos actuales se verificaron exactamente como en la tabla de arriba. `load_history.py` ya derivaba los pacientes de los CSV (MVP-01), así que P005 entra solo.
 

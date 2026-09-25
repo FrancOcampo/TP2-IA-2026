@@ -1,6 +1,6 @@
 # ADR-0011 · Alertas contra metas de control de DM2, no criterios diagnósticos
 
-- **Estado:** Aceptado. La tabla está pendiente de validación clínica del equipo 🩺.
+- **Estado:** Aceptado. Tabla validada por el equipo el 2026-09-25 (Franco Ocampo).
 - **Fecha:** 2026-09-24
 - **Relacionado:** plan F2-01 / decisión D1 · Linear EAS-12 · [ADR-0009](0009-ventana-principal-del-monitor.md)
 

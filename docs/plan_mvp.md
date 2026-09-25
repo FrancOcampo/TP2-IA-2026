@@ -86,8 +86,8 @@ Estado al 2026-09-24: M1, M2 y M3 hechos y mergeados en `develop` (sin push). Ga
 |---|---|---|---|
 | 1 | ~~API key de LLM~~ ✅ Groq configurada. **MVP-06 (EAS-38), corrida del 2026-09-25:** 9 de 12 casos con el LLM real (happy_01–03, edge_01–04, edge_06) + adv_03 sin LLM, todos correctos en lo clínico (alertas, deltas, hipoglucemia, cambio de paciente, datos insuficientes). Las cifras mal calculadas de edge_06 ya están corregidas. **Faltan adv_01, adv_02 y adv_04** (se agotó la cuota diaria de ambos modelos): `uv run python tests/eval_runner.py --case adv_01` (y adv_02, adv_04) | Franco | Cierre del MVP |
 | 2 | ~~Autorizar Linear y sincronizar~~ ✅ 2026-09-24: EAS-6…11, 18, 19, 27, 30 en Done; EAS-12, 17, 29 en In Progress (con lo que falta comentado); MVP-01…06 = EAS-33…38 | Franco | — |
-| 3 | **Validación clínica 🩺** de la tabla de metas de control ([ADR-0011](adr/0011-metas-de-control-dm2.md)), dejando fecha y quién en F2-01 | Equipo | Cierre formal de F2-01 |
-| 4 | **Contenido ADA**: decidir si se incorporan las secciones 2/6/9/10 de los *Standards 2024* (derechos de autor) o se quitan las menciones a ADA del artículo ([ADR-0013](adr/0013-corpus-sin-ada-y-huella-del-indice.md)) | Equipo | Cierre de F2-06 |
+| 3 | ~~Validación clínica 🩺~~ ✅ 2026-09-25: el equipo aprobó la tabla de metas de control (EAS-12 cerrado) | Equipo | — |
+| 4 | **Contenido ADA**: decidido **incorporarlo** (2026-09-25). Falta conseguir las secciones 2/6/9/10 de los *Standards of Care 2024*, convertirlas a Markdown y dejarlas en `data/guias/` ([ADR-0013](adr/0013-corpus-sin-ada-y-huella-del-indice.md)) | Franco | Cierre de F2-06 (EAS-17) |
 | 5 | **Push** de `develop` a `origin` | Franco | Que el equipo vea los cambios |
 
 Después del MVP, el orden sigue el [plan de correcciones](plan_correcciones.md): F2-02…F2-05, Fase 3, Fase 4.
