@@ -256,3 +256,56 @@ def test_numeracion_de_secciones_correlativa():
     md = render_report(_reporte(), _build_analysis("P002"), FragmentBank(), None, "", "P002")
     numeros = [int(n) for n in re.findall(r"^### (\d+)\.", md, re.M)]
     assert numeros == list(range(1, len(numeros) + 1))
+
+
+
+# ---------------- extracto de las citas y bibliografía ----------------
+
+def test_extracto_empieza_y_termina_en_oraciones_completas():
+    from agents.report import best_excerpt
+
+    fragmento = ("ovasculares. Comentario R14 ->r ->r ->r La HbA1c es la principal herramienta para valorar el control "
+                 "glucémico en personas con diabetes. Otra oración distinta sobre un tema que no se relaciona con el caso. "
+                 "Esta última oración queda cortada a mitad de pal")
+    extracto = best_excerpt(fragmento, "HbA1c control glucémico")
+    assert extracto.startswith("La HbA1c es la principal herramienta")
+    assert "->r" not in extracto and "R14" not in extracto and "ovasculares" not in extracto
+    assert extracto.endswith(".") and "pal" not in extracto.split()[-1:]
+
+
+def test_extracto_elige_la_oracion_pertinente_al_hallazgo():
+    from agents.report import best_excerpt
+
+    fragmento = ("Las estatinas reducen el riesgo cardiovascular en personas mayores de cuarenta años. "
+                 "La hipoglucemia de nivel 2 se define como una glucosa menor a 54 mg/dL en el paciente. "
+                 "El ejercicio regular mejora la sensibilidad a la insulina en la mayoría de las personas.")
+    assert "hipoglucemia de nivel 2" in best_excerpt(fragmento, "hipoglucemia nivel 2 glucosa")
+
+
+def test_extracto_respeta_el_maximo_y_vacio_si_no_hay_oraciones():
+    from agents.report import best_excerpt
+
+    largo = "Esta oración clínica es muy larga " + "y sigue con más palabras " * 40 + "y termina acá."
+    assert len(best_excerpt(largo, "")) <= 281
+    assert best_excerpt("corto", "") == ""
+
+
+def test_fragmentos_de_bibliografia_se_detectan_y_no_entran_al_banco():
+    from agents.report import looks_like_references
+
+    biblio = ("12. Pérez J, Gómez M. Diabetes Care 2019;42:1-9. 13. Smith A, et al. N Engl J Med 2018;379:100-110. "
+              "14. Rossi L, Lima P. Lancet 2017;390:20-30.")
+    clinico = "La meta de HbA1c es menor a 7 % en la mayoría de los adultos, individualizada según el paciente."
+    assert looks_like_references(biblio) and not looks_like_references(clinico)
+
+    banco = FragmentBank()
+    prefetch_guidelines(banco, ["q"], lambda q, k=3: [f"[g.md] {biblio}", f"[g.md] {clinico}"])
+    assert [t for _, t in banco.items] == [clinico]
+    assert numbered_search_result(FragmentBank(), [f"[g.md] {biblio}"]) == "No se encontraron fragmentos relevantes."
+
+
+def test_renglon_de_bibliografia_suelto_no_se_cita():
+    from agents.report import best_excerpt, looks_like_references
+
+    assert looks_like_references("56 Sociedad Argentina de Diabetes. Guía para el tratamiento de la diabetes mellitus tipo 2.")
+    assert best_excerpt("56 Sociedad Argentina de Diabetes. Guía para el tratamiento.", "diabetes") == ""

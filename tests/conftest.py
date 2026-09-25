@@ -23,7 +23,10 @@ def _sin_llm_real(request, monkeypatch):
     if request.node.get_closest_marker("llm"):
         return
     monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)
-    for var in ("GROQ_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+    # TODAS las variables del LLM, no solo algunas keys: el .env del desarrollador puede fijar el proveedor
+    # (p. ej. LLM_PROVIDER=openrouter) y, con su key, los tests llamarían a un proveedor de pago (lento y con costo).
+    for var in ("LLM_PROVIDER", "LLM_MODEL", "LLM_FALLBACK_MODELS", "LLM_BASE_URL", "LLM_API_KEY",
+                "GROQ_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"):
         monkeypatch.delenv(var, raising=False)
 
 
