@@ -12,9 +12,10 @@
 import os
 from typing import Any
 
-# Única fuente del modelo por defecto (F4-01). El de Groq es el que declara el artículo.
+# Única fuente del modelo por defecto (F4-01, ADR-0014). Groq dio de baja Llama 3.3 70B (el del
+# artículo); gpt-oss-120b es el modelo con tool calling más capaz disponible en el free tier.
 DEFAULT_MODELS = {
-    "groq": "llama-3.3-70b-versatile",
+    "groq": "openai/gpt-oss-120b",
     "gemini": "gemma-4-31b-it",
 }
 

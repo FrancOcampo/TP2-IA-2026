@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------
 
 
-@tool
+@tool("load_patient_data")
 def tool_load_patient_data(patient_id: str) -> str:
     """Carga el historial clínico completo del paciente desde el EHR.
 
@@ -84,7 +84,7 @@ def tool_load_patient_data(patient_id: str) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-@tool
+@tool("calculate_stats")
 def tool_calculate_stats(patient_id: str, metric: str, last_n_months: Optional[int] = None) -> str:
     """Calcula estadísticas clínicas para una métrica del paciente.
 
@@ -116,7 +116,7 @@ def tool_calculate_stats(patient_id: str, metric: str, last_n_months: Optional[i
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-@tool
+@tool("detect_threshold_violations")
 def tool_detect_threshold_violations(patient_id: str, metric: str, last_n_months: Optional[int] = None) -> str:
     """Detecta valores fuera de las metas de control de DM2 para una métrica.
 
@@ -145,7 +145,7 @@ def tool_detect_threshold_violations(patient_id: str, metric: str, last_n_months
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-@tool
+@tool("get_medication_schedule")
 def tool_get_medication_schedule(patient_id: str) -> str:
     """Devuelve la medicación activa del paciente (nombre, dosis, frecuencia).
 
@@ -299,10 +299,10 @@ class CollectedResults:
         if isinstance(data, dict) and "error" in data:
             return
 
-        if tool_name == "tool_get_medication_schedule" and isinstance(data, list):
+        if tool_name == tool_get_medication_schedule.name and isinstance(data, list):
             self.meds = [Medication(**m) for m in data]
             return
-        if tool_name not in ("tool_calculate_stats", "tool_detect_threshold_violations"):
+        if tool_name not in (tool_calculate_stats.name, tool_detect_threshold_violations.name):
             return
 
         timerange = _timerange_from_args(tool_args)
@@ -310,7 +310,7 @@ class CollectedResults:
             self.analysis_window = timerange
         key = (tool_args.get("metric", ""), window_key(timerange))
 
-        if tool_name == "tool_calculate_stats" and isinstance(data, dict):
+        if tool_name == tool_calculate_stats.name and isinstance(data, dict):
             self.stats[key] = MetricStats(**{k: data[k] for k in MetricStats.model_fields})
         elif isinstance(data, list):
             self.checked.add(key)

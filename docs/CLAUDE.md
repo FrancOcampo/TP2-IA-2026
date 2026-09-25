@@ -33,7 +33,7 @@ código. Ver también [docs/logs.md](docs/logs.md) (cómo leer las trazas/observ
 
 - **uv** gestiona el entorno (instalado en `C:\Users\marco\.local\bin`; en terminales
   nuevas ya está en el PATH).
-- LLM: Groq `llama-3.3-70b-versatile` por defecto (`LLM_PROVIDER`/`LLM_MODEL`; defaults en `agents/llm_factory.DEFAULT_MODELS`; Gemini acepta `GOOGLE_API_KEY` o `GEMINI_API_KEY`) · Embeddings: **locales en proceso** (ONNX MiniLM de ChromaDB; Ollama opcional vía `EMBEDDING_PROVIDER`, ADR-0006) · Vector store:
+- LLM: Groq `openai/gpt-oss-120b` por defecto (ADR-0014; free tier: 8000 tokens/min) (`LLM_PROVIDER`/`LLM_MODEL`; defaults en `agents/llm_factory.DEFAULT_MODELS`; Gemini acepta `GOOGLE_API_KEY` o `GEMINI_API_KEY`) · Embeddings: **locales en proceso** (ONNX MiniLM de ChromaDB; Ollama opcional vía `EMBEDDING_PROVIDER`, ADR-0006) · Vector store:
   ChromaDB (solo guías) · Historial: **SQLite local** por defecto, MongoDB opcional (`HISTORY_BACKEND`, ADR-0005) · Validación: Pydantic v2 ·
   Interfaz: **Gradio** (decisión del equipo; la dependencia `streamlit` sigue en
   `pyproject.toml` pero no se usa) · Observabilidad: **LangSmith + logging propio**
@@ -61,7 +61,7 @@ uv lock                 # regenerar lockfile tras cambiar dependencias
 - [agents/prompts.py](agents/prompts.py) — system + human prompts de los 3 agentes.
 - [agents/monitor.py](agents/monitor.py) — Agente Monitor real (Integrante A). Loop ReAct:
   wrappea las 4 tools de C como `@tool` de LangChain, las bindea a `ChatGroq`
-  (`llama-3.3-70b`), ejecuta el loop de razonamiento, y ensambla `MonitorAnalysis`
+  (default en `llm_factory.DEFAULT_MODELS`), ejecuta el loop de razonamiento, y ensambla `MonitorAnalysis`
   programáticamente. Si no hay `GROQ_API_KEY`, cae a un fallback determinístico
   (ejecuta las tools directamente sin LLM).
 - [interface/logging_config.py](interface/logging_config.py) — observabilidad (Integrante D).

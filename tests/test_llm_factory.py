@@ -15,7 +15,7 @@ def _sin_config(monkeypatch):
 
 
 def test_default_es_el_modelo_del_articulo():
-    assert active_model() == ("groq", "llama-3.3-70b-versatile")
+    assert active_model() == ("groq", "openai/gpt-oss-120b")
 
 
 def test_llm_model_pisa_el_default(monkeypatch):
@@ -39,4 +39,4 @@ def test_key_de_otro_proveedor_no_cuenta(monkeypatch):
 def test_llm_status_explica_el_modo(monkeypatch):
     assert "GROQ_API_KEY" in llm_status() and "determinístico" in llm_status()
     monkeypatch.setenv("GROQ_API_KEY", "x")
-    assert llm_status() == "LLM activo: groq · llama-3.3-70b-versatile"
+    assert llm_status() == "LLM activo: groq · openai/gpt-oss-120b"

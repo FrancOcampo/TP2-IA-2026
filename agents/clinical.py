@@ -44,7 +44,7 @@ def _safe_json(fn, *args) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-@tool
+@tool("get_patient_history")
 def tool_get_patient_history(patient_id: str) -> str:
     """Devuelve el perfil del paciente (demografía, diagnósticos, comorbilidades, medicación
     de base) y el historial de sesiones previas guardadas. `found: false` si no existe.
@@ -55,7 +55,7 @@ def tool_get_patient_history(patient_id: str) -> str:
     return _safe_json(get_patient_history, patient_id)
 
 
-@tool
+@tool("compare_with_previous_sessions")
 def tool_compare_with_previous_sessions(patient_id: str) -> str:
     """Compara métricas de la sesión actual del paciente con las previas registradas.
 
@@ -65,7 +65,7 @@ def tool_compare_with_previous_sessions(patient_id: str) -> str:
     return _safe_json(compare_with_previous_sessions, patient_id)
 
 
-@tool
+@tool("search_clinical_guidelines")
 def tool_search_clinical_guidelines(query: str) -> str:
     """Busca fragmentos relevantes de las guías clínicas (SAD 2025 y Guía Nacional/MSAL 2019) basados en el query.
 
@@ -172,11 +172,11 @@ def run_clinical_agent(state: AgentState) -> dict[str, Any]:
             messages.append(ToolMessage(content=result, tool_call_id=tool_id))
 
             # Guardar en acumuladores
-            if tool_name == "tool_get_patient_history":
+            if tool_name == tool_get_patient_history.name:
                 last_history_fetched = result
-            elif tool_name == "tool_compare_with_previous_sessions":
+            elif tool_name == tool_compare_with_previous_sessions.name:
                 last_comparison_fetched = result
-            elif tool_name == "tool_search_clinical_guidelines":
+            elif tool_name == tool_search_clinical_guidelines.name:
                 collected_rag_context.append(result)
 
             logger.info(

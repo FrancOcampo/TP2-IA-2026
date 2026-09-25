@@ -21,6 +21,7 @@ Complementa al [plan de correcciones](../plan_correcciones.md), que dice **qué*
 | [0011](0011-metas-de-control-dm2.md) | Alertas contra metas de control de DM2, no criterios diagnósticos | Aceptado (🩺 validación pendiente) | 2026-09-24 | F2-01 / D1 · EAS-12 |
 | [0012](0012-perfil-del-paciente-y-sesiones-semilla.md) | Perfil clínico del paciente, sesiones semilla y tools de historial que no lanzan | Aceptado | 2026-09-24 | F2-07 · EAS-18 |
 | [0013](0013-corpus-sin-ada-y-huella-del-indice.md) | ADA fuera del corpus hasta tener contenido clínico, e índice con huella del corpus | Aceptado | 2026-09-24 | F2-06 · EAS-17 |
+| [0014](0014-modelo-groq-gpt-oss.md) | Modelo por defecto `openai/gpt-oss-120b` en Groq y tools con el nombre de los prompts | Aceptado | 2026-09-25 | MVP-06 · EAS-38 |
 
 ## Plantilla
 

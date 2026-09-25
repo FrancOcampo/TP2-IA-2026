@@ -28,6 +28,20 @@ def app():
     return build_graph()
 
 
+@pytest.fixture
+def sin_degradacion(caplog):
+    """
+    En modo `llm`, falla si algún agente cayó al fallback determinístico: sin esto el test
+    "pasa" aunque el LLM no haya corrido (p. ej. un modelo dado de baja devuelve 404 y el
+    grafo degrada en silencio).
+    """
+    caplog.set_level("ERROR", logger="orchestrator.graph")
+    yield
+    # get_records("call"): en el teardown, caplog.records solo tiene los de esta fase.
+    errores = [r.getMessage() for r in caplog.get_records("call") if r.name == "orchestrator.graph"]
+    assert not errores, f"el LLM no corrió (fallback): {errores[0][:300]}"
+
+
 def _cfg(thread_id):
     return {"configurable": {"thread_id": thread_id}}
 
@@ -109,7 +123,7 @@ def test_refinamiento_amplia_ventana_acotada(app, monkeypatch):
     import agents.monitor
     import orchestrator.graph as graph
 
-    llamada = {"name": "tool_calculate_stats", "id": "c1", "type": "tool_call",
+    llamada = {"name": "calculate_stats", "id": "c1", "type": "tool_call",
                "args": {"patient_id": "P002", "metric": "hba1c", "last_n_months": 1}}
     guion = [AIMessage(content="", tool_calls=[llamada]), AIMessage(content="listo")]
 
@@ -136,7 +150,7 @@ def test_refinamiento_amplia_ventana_acotada(app, monkeypatch):
 # ---- Modo estocástico: el LLM real (plomería, no contenido) ----
 
 @pytest.mark.llm
-def test_pipeline_estocastico_se_cablea(app):
+def test_pipeline_estocastico_se_cablea(app, sin_degradacion):
     """Con LLM real, el pipeline completo corre de punta a punta y respeta el guardrail.
 
     Aserciones LAXAS a propósito: validan que Monitor y Clínico se comunican y que el
@@ -154,7 +168,7 @@ def test_pipeline_estocastico_se_cablea(app):
 
 
 @pytest.mark.llm
-def test_seguimiento_estocastico_no_pisa_reporte(app):
+def test_seguimiento_estocastico_no_pisa_reporte(app, sin_degradacion):
     """Con LLM real, la respuesta de seguimiento va a followup_answer y el reporte queda igual (F1-03)."""
     if not has_api_key():
         pytest.skip("requiere API key (modo estocástico)")
