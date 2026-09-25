@@ -61,7 +61,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F3-02** | [EAS-21](https://linear.app/easymetricdev/issue/EAS-21) | Loop de refinamiento real: suficiencia estructurada + pedido concreto al Monitor | 🟠 Alta | F1-05, F1-06 | ⬜ |
 | **F3-03** | [EAS-22](https://linear.app/easymetricdev/issue/EAS-22) | Flags del Monitor coherentes y notas del plan del LLM | 🟡 Media | F1-05 | ⬜ |
 | **F3-04** | [EAS-23](https://linear.app/easymetricdev/issue/EAS-23) | Reporte clínico estructurado, citas validadas y disclaimer por código | 🟠 Alta | F2-05 | ⬜ |
-| **F3-05** | [EAS-24](https://linear.app/easymetricdev/issue/EAS-24) | Contexto del modo seguimiento compacto | 🟢 Baja | F1-03 | ⬜ |
+| **F3-05** | [EAS-24](https://linear.app/easymetricdev/issue/EAS-24) | Contexto del modo seguimiento compacto | 🟢 Baja | F1-03 | ✅ (adelantado al MVP, ADR-0015) |
 | **F3-06** | [EAS-25](https://linear.app/easymetricdev/issue/EAS-25) | Robustez de tools y marca de modo de ejecución en el estado | 🟡 Media | — | ⬜ |
 | **F3-07** | [EAS-26](https://linear.app/easymetricdev/issue/EAS-26) | Campo "Orientación del análisis" en la UI | 🟢 Baja | F3-01 | ⬜ |
 | **F4-01** | [EAS-27](https://linear.app/easymetricdev/issue/EAS-27) | Modelo por defecto alineado con el artículo | 🟢 Baja | — | ✅ (MVP-03) |
@@ -578,7 +578,7 @@ El wrapper solo recibe `query` ([clinical.py:59-66](../agents/clinical.py#L59));
 
 **Cambios.** Serializar el análisis como resumen legible (stats por métrica + episodios), incluir solo los últimos N=6 turnos sin los mensajes del Monitor, y pasar `report` una sola vez.
 
-**Aceptación:** [ ] el prompt de seguimiento de P002 mide menos del 50 % de los tokens actuales (loguear conteo antes y después).
+**Aceptación:** [x] medido con Groq (`gpt-oss-20b`): el reporte de P002 pasa de 8.265 tokens en un solo request (413) a un máximo de 3,7k; el seguimiento, a ~3k en 1 llamada. Implementado en `agents/context.py` junto con el modo `lean` ([ADR-0015](adr/0015-modo-lean-para-free-tier.md)).
 
 ---
 

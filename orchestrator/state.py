@@ -135,6 +135,8 @@ class MonitorAnalysis(BaseModel):
     analysis_window: TimeRange = Field(default_factory=TimeRange)
     # Stats pedidas por el LLM con otra ventana, sin mezclarse con las principales ("metric@ventana").
     extra_windows: dict[str, MetricStats] = Field(default_factory=dict)
+    # Criterio del LLM del Monitor (ventana/foco elegidos); auditable, no se usa para cálculos (F3-03).
+    monitor_notes: Optional[str] = None
 
 
 # -------------------------------------------------------------------

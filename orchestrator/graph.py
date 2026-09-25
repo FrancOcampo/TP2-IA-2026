@@ -15,6 +15,7 @@ from orchestrator.router import (
     is_reset_message,
     extract_patient_id,
 )
+from agents.context import metrics_summary
 from agents.llm_factory import has_api_key
 from tools.history_tools import update_patient_history
 from tools.patient_tools import load_patient_data
@@ -113,19 +114,6 @@ def orchestrator_node(state: AgentState) -> AgentState:
 # Nodo de guardado — persiste la sesión en el historial (F1-04)
 # -------------------------------------------------------------------
 
-def _metrics_summary(analysis: MonitorAnalysis) -> dict[str, float]:
-    """Último valor de cada métrica con datos; permite comparar con la próxima sesión."""
-    series = {
-        "glucose_fasting": analysis.glucose_fasting_stats,
-        "hba1c": analysis.hba1c_stats,
-        "glucose_postprandial": analysis.glucose_postprandial_stats,
-        "weight": analysis.weight_stats,
-        "blood_pressure_systolic": analysis.blood_pressure_stats.systolic,
-        "blood_pressure_diastolic": analysis.blood_pressure_stats.diastolic,
-    }
-    return {name: stats.last_value for name, stats in series.items() if stats is not None}
-
-
 def build_session_data(state: AgentState) -> dict:
     """Contenido de la sesión a persistir (definición conceptual §2.6, Tool 9)."""
     analysis = state["analysis"]
@@ -135,7 +123,7 @@ def build_session_data(state: AgentState) -> dict:
         "doctor_context": state.get("doctor_context") or "",
         "report": state["report"],
         "alerts": [a.model_dump(mode="json") for a in analysis.alerts],
-        "metrics_summary": _metrics_summary(analysis),
+        "metrics_summary": metrics_summary(analysis),
         "longitudinal_comparison": state.get("longitudinal_comparison"),
         "suggested_questions": [],  # TODO(F3-04): preguntas sugeridas del reporte estructurado
     }

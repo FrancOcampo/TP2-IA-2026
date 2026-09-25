@@ -64,6 +64,13 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 | **MVP-06** ([EAS-38](https://linear.app/easymetricdev/issue/EAS-38)) | Corrida del `eval_runner` con LLM real, sin casos `error` (bloqueado: falta API key) | ⬜ |
 | — | README con el camino de 3 comandos | ✅ |
 
+### M5 · Funcionar con el LLM real en el free tier (surgió al correr MVP-06)
+
+| ID | Título | Estado |
+|---|---|---|
+| — | Modelo disponible en Groq (`gpt-oss-120b`), tools con el nombre de los prompts, tests `llm` que detectan fallback ([ADR-0014](adr/0014-modelo-groq-gpt-oss.md)) | ✅ |
+| F3-05 | Contexto compacto + `AGENT_MODE=lean` (Monitor en 1 llamada, Clínico con historial precargado) + razonamiento `low` ([ADR-0015](adr/0015-modo-lean-para-free-tier.md)) | ✅ |
+
 ## Fuera del MVP
 
 F2-02 (PA/peso), F2-03 (episodios), F2-04 (clasificación longitudinal), F2-05 (contexto en RAG), toda la Fase 3

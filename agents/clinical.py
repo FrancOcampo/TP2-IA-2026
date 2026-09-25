@@ -2,9 +2,13 @@
 #
 # Agente Clínico real — reemplaza el stub de orchestrator/graph.py.
 #
-# Implementación (contrato A+C):
-#   - Agente ReAct: el LLM (Groq llama-3.3-70b-versatile) interpreta los hallazgos del Monitor,
-#     consulta el historial del paciente en MongoDB y las guías clínicas vía RAG, y redacta el reporte.
+# Implementación (contrato A+C, ADR-0015):
+#   - Agente ReAct: el LLM interpreta los hallazgos del Monitor, consulta el historial del
+#     paciente y las guías clínicas vía RAG, y redacta el reporte.
+#   - AGENT_MODE=lean (default, free tier): el historial y la comparación se consultan por código
+#     (son búsquedas determinísticas) y van en el prompt; el LLM solo busca en las guías y redacta,
+#     con pocos pasos. AGENT_MODE=react: el LLM decide todas las tools (loop completo).
+#   - El contexto va compacto en ambos modos (agents/context.py, F3-05).
 #   - Historial: tools/history_tools.py (SQLite local o MongoDB, ver tools/history_store.py).
 #   - RAG: rag/retriever.py + ChromaDB (implementación real).
 #   - El output es una actualización del AgentState.
@@ -18,11 +22,13 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 
-from agents.llm_factory import build_llm, extract_content
+from agents.context import compact_history, metrics_summary, recent_conversation, summarize_analysis
+from agents.llm_factory import agent_mode, build_llm, extract_content
 
 from agents.prompts import (
     CLINICAL_HUMAN_TEMPLATE_FOLLOWUP,
     CLINICAL_HUMAN_TEMPLATE_REPORT,
+    CLINICAL_LEAN_PREFETCH,
     CLINICAL_SYSTEM_PROMPT,
 )
 from orchestrator.state import AgentState
@@ -52,7 +58,7 @@ def tool_get_patient_history(patient_id: str) -> str:
     Args:
         patient_id: ID del paciente (ej. "P001")
     """
-    return _safe_json(get_patient_history, patient_id)
+    return _safe_json(lambda pid: compact_history(get_patient_history(pid)), patient_id)
 
 
 @tool("compare_with_previous_sessions")
@@ -83,7 +89,13 @@ CLINICAL_TOOLS = [
     tool_search_clinical_guidelines,
 ]
 
-_MAX_CLINICAL_STEPS = 10
+# Pasos máximos del loop por modo (cada paso reenvía todo el historial de mensajes al LLM).
+_MAX_CLINICAL_STEPS = {"react": 10, "lean": 3}
+
+_FORCE_ANSWER = (
+    "Ya no quedan pasos de herramientas. Redactá ahora la respuesta final con la información "
+    "disponible, sin llamar herramientas."
+)
 
 
 def _build_clinical_llm():
@@ -91,64 +103,76 @@ def _build_clinical_llm():
     return build_llm(CLINICAL_TOOLS)
 
 
+def _build_answer_llm():
+    """LLM sin tools: fuerza la redacción cuando se agotan los pasos (F3-06)."""
+    return build_llm()
+
+
+def _prefetch_longitudinal(patient_id: str, analysis) -> tuple[dict, dict]:
+    """Historial compacto y comparación con la sesión anterior, calculados por código (modo lean)."""
+    history = compact_history(get_patient_history(patient_id))
+    current = metrics_summary(analysis) if analysis else None
+    comparison = compare_with_previous_sessions(patient_id, current_metrics=current)
+    return history, comparison
+
+
 def run_clinical_agent(state: AgentState) -> dict[str, Any]:
     """
     Ejecuta el Agente Clínico como un loop ReAct manual:
     1. Determina si es MODO REPORTE o MODO SEGUIMIENTO.
-    2. Envía el system prompt + el human message correspondiente al LLM.
-    3. El LLM decide qué tools invocar (guidelines, history, comparison).
-    4. Se ejecutan las tools y se devuelven los resultados al LLM.
-    5. Se repite hasta que el LLM emite una respuesta sin tool_calls.
-    6. Se parsea el contenido final y se actualiza el estado.
+    2. Envía el system prompt + el human message (contexto compacto) al LLM.
+       En modo lean, el historial y la comparación ya van en el mensaje.
+    3. El LLM decide qué tools invocar; se ejecutan y se devuelven los resultados.
+    4. Se repite hasta que el LLM emite una respuesta sin tool_calls, o se agotan los pasos:
+       en ese caso una última llamada sin tools fuerza la respuesta (nunca queda vacía).
+    5. Se actualiza el estado.
     """
     patient_id = state.get("patient_id", "")
     query = state.get("query", "")
     doctor_context = state.get("doctor_context", "") or ""
-    is_followup = state.get("is_followup", False)
+    is_followup = bool(state.get("is_followup") and state.get("report"))
     existing_report = state.get("report")
     analysis = state.get("analysis")
+    mode = agent_mode()
 
     llm = _build_clinical_llm()
 
     # Acumuladores de resultados de las herramientas para el estado estructurado
-    last_history_fetched = ""
-    last_comparison_fetched = ""
+    comparison: dict | str | None = None
     collected_rag_context: list[str] = []
 
-    # Determinar modo y formatear el mensaje humano inicial
-    if is_followup and existing_report:
-        # MODO SEGUIMIENTO
-        # Para pasar el historial de conversación en el template, lo formateamos de forma legible
-        conv_list = state.get("conversation", [])
-        formatted_conv = ""
-        for msg in conv_list:
-            role = "Médico" if msg.get("role") == "user" else "Asistente"
-            content = msg.get("content", "")
-            formatted_conv += f"{role}: {content}\n"
-
+    if is_followup:
         human_msg_content = CLINICAL_HUMAN_TEMPLATE_FOLLOWUP.format(
             report=existing_report,
-            analysis=str(analysis),
-            conversation=formatted_conv or "(sin conversación previa)",
+            analysis=summarize_analysis(analysis),
+            conversation=recent_conversation(state.get("conversation", [])),
             query=query,
         )
     else:
-        # MODO REPORTE
         human_msg_content = CLINICAL_HUMAN_TEMPLATE_REPORT.format(
-            analysis=str(analysis),
+            analysis=summarize_analysis(analysis),
             doctor_context=doctor_context or "(sin contexto adicional)",
             query=query,
         )
+        if mode == "lean":
+            history, comparison = _prefetch_longitudinal(patient_id, analysis)
+            human_msg_content += CLINICAL_LEAN_PREFETCH.format(
+                history=json.dumps(history, ensure_ascii=False, default=str),
+                comparison=json.dumps(comparison, ensure_ascii=False, default=str),
+            )
 
     messages = [
         SystemMessage(content=CLINICAL_SYSTEM_PROMPT),
         HumanMessage(content=human_msg_content),
     ]
 
-    logger.info("Clínico: Iniciando loop ReAct (Modo: %s)", "Seguimiento" if is_followup else "Reporte")
+    max_steps = _MAX_CLINICAL_STEPS[mode]
+    logger.info("Clínico: loop ReAct (modo %s, %s, máx %d pasos)",
+                mode, "seguimiento" if is_followup else "reporte", max_steps)
 
-    # Loop ReAct
-    for step in range(_MAX_CLINICAL_STEPS):
+    tools_by_name = {t.name: t for t in CLINICAL_TOOLS}
+    response = None
+    for step in range(max_steps):
         response = llm.invoke(messages)
         messages.append(response)
 
@@ -157,25 +181,15 @@ def run_clinical_agent(state: AgentState) -> dict[str, Any]:
             logger.info("Clínico: LLM terminó tras %d pasos", step + 1)
             break
 
-        # Ejecutar cada tool_call
         for tc in response.tool_calls:
-            tool_name = tc["name"]
-            tool_args = tc["args"]
-            tool_id = tc["id"]
-
-            tool_fn = {t.name: t for t in CLINICAL_TOOLS}.get(tool_name)
-            if tool_fn is None:
-                result = json.dumps({"error": f"Tool desconocida: {tool_name}"})
-            else:
-                result = tool_fn.invoke(tool_args)
-
+            tool_name, tool_args, tool_id = tc["name"], tc["args"], tc["id"]
+            tool_fn = tools_by_name.get(tool_name)
+            result = (json.dumps({"error": f"Tool desconocida: {tool_name}"}) if tool_fn is None
+                      else tool_fn.invoke(tool_args))
             messages.append(ToolMessage(content=result, tool_call_id=tool_id))
 
-            # Guardar en acumuladores
-            if tool_name == tool_get_patient_history.name:
-                last_history_fetched = result
-            elif tool_name == tool_compare_with_previous_sessions.name:
-                last_comparison_fetched = result
+            if tool_name == tool_compare_with_previous_sessions.name:
+                comparison = result
             elif tool_name == tool_search_clinical_guidelines.name:
                 collected_rag_context.append(result)
 
@@ -185,13 +199,18 @@ def run_clinical_agent(state: AgentState) -> dict[str, Any]:
                 result[:200] if isinstance(result, str) else str(result)[:200],
             )
     else:
-        logger.warning("Clínico: alcanzó el límite de %d pasos", _MAX_CLINICAL_STEPS)
+        logger.warning("Clínico: alcanzó el límite de %d pasos; se fuerza la respuesta", max_steps)
+        response = _build_answer_llm().invoke(messages + [HumanMessage(content=_FORCE_ANSWER)])
 
-    final_content = extract_content(response)
+    final_content = extract_content(response).strip()
+    if not final_content:
+        # Nunca se guarda un reporte vacío: se falla fuerte y el nodo cae al fallback (logueado).
+        finish = (getattr(response, "response_metadata", {}) or {}).get("finish_reason")
+        raise RuntimeError(f"el LLM devolvió una respuesta vacía (finish_reason={finish})")
 
     # Modo seguimiento: la respuesta va a `followup_answer` y el reporte de la sesión no se
     # toca (D3). No hay evaluación de suficiencia: el refinamiento es solo del modo reporte.
-    if is_followup and existing_report:
+    if is_followup:
         return {
             "followup_answer": final_content,
             "information_sufficient": True,
@@ -202,23 +221,14 @@ def run_clinical_agent(state: AgentState) -> dict[str, Any]:
     # un criterio determinístico sobre el análisis (F1-06). TODO(F3-02): ClinicalAssessment.
     updates: dict[str, Any] = {
         "report": final_content,
-        "conversation": [{
-            "role": "assistant",
-            "content": final_content,
-        }]
+        "conversation": [{"role": "assistant", "content": final_content}],
     }
-
-    # Si se cargó información longitudinal, guardarla estructuradamente
-    if last_comparison_fetched:
-        updates["longitudinal_comparison"] = {"text": last_comparison_fetched}
-    elif not is_followup:
-        # Fallback si no la llamó pero es P001/P002/P003 y requiere comparación
-        if analysis and analysis.requires_longitudinal_comparison:
-            comp_str = str(compare_with_previous_sessions(patient_id))
-            updates["longitudinal_comparison"] = {"text": comp_str}
-
-    # Si se buscaron guías, agregarlas al contexto
+    if comparison is None and analysis and analysis.requires_longitudinal_comparison:
+        comparison = compare_with_previous_sessions(patient_id, current_metrics=metrics_summary(analysis))
+    if comparison is not None:
+        # TODO(F2-04): dict estructurado por métrica con clasificación de la evolución.
+        updates["longitudinal_comparison"] = {"text": comparison if isinstance(comparison, str)
+                                              else json.dumps(comparison, ensure_ascii=False, default=str)}
     if collected_rag_context:
         updates["rag_context"] = collected_rag_context
-
     return updates

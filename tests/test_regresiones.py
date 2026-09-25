@@ -224,6 +224,7 @@ def _run_monitor(monkeypatch, patient_id: str, tool_calls: list[dict]):
     from agents import monitor
 
     script = [AIMessage(content="", tool_calls=tool_calls), AIMessage(content="Análisis listo.")]
+    monkeypatch.setenv("AGENT_MODE", "react")  # estos tests guionan el loop ReAct (ADR-0015)
     monkeypatch.setattr(monitor, "_build_monitor_llm", lambda: _ScriptedLLM(script))
     return monitor.run_monitor_agent({"patient_id": patient_id, "query": "", "doctor_context": ""})
 

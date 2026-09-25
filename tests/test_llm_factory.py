@@ -5,12 +5,13 @@
 
 import pytest
 
-from agents.llm_factory import DEFAULT_MODELS, active_model, has_api_key, llm_status
+from agents.llm_factory import DEFAULT_MODELS, active_model, generation_kwargs, has_api_key, llm_status
 
 
 @pytest.fixture(autouse=True)
 def _sin_config(monkeypatch):
-    for var in ("LLM_PROVIDER", "LLM_MODEL", "GROQ_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+    for var in ("LLM_PROVIDER", "LLM_MODEL", "GROQ_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY",
+                "LLM_MAX_TOKENS", "LLM_REASONING_EFFORT", "AGENT_MODE"):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -40,3 +41,19 @@ def test_llm_status_explica_el_modo(monkeypatch):
     assert "GROQ_API_KEY" in llm_status() and "determinístico" in llm_status()
     monkeypatch.setenv("GROQ_API_KEY", "x")
     assert llm_status() == "LLM activo: groq · openai/gpt-oss-120b"
+
+
+def test_modelos_de_razonamiento_limitan_el_esfuerzo():
+    """Sin esto gpt-oss gasta todo el límite razonando y devuelve respuestas vacías."""
+    assert generation_kwargs("openai/gpt-oss-120b") == {"max_tokens": 4096, "reasoning_effort": "low"}
+    assert generation_kwargs("qwen/qwen3.8-27b") == {"max_tokens": 4096}
+
+
+def test_modo_de_agentes_por_defecto_es_lean(monkeypatch):
+    from agents.llm_factory import agent_mode
+
+    assert agent_mode() == "lean"
+    monkeypatch.setenv("AGENT_MODE", "react")
+    assert agent_mode() == "react"
+    monkeypatch.setenv("AGENT_MODE", "cualquiera")
+    assert agent_mode() == "lean"
