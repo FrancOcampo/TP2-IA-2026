@@ -126,3 +126,9 @@ def test_ingesta_quita_guias_que_ya_no_se_indexan(collection):
     build_collection(docs, collection)
     fuentes = {m["source"] for m in collection.get(include=["metadatas"])["metadatas"]}
     assert fuentes == {"guia.md"}
+
+
+def test_el_readme_de_la_carpeta_no_es_una_guia(tmp_path):
+    (tmp_path / "README.md").write_text("# Guías\n\nDocumentación de la carpeta.", encoding="utf-8")
+    (tmp_path / "guia.md").write_text("# Metas\n\nHbA1c < 7 %.", encoding="utf-8")
+    assert [d["source"] for d in ingest.load_markdown_files(tmp_path, verbose=False)] == ["guia.md"]

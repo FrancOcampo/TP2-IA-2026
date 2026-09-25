@@ -66,6 +66,7 @@ MIN_CHUNK_SIZE = CHUNK_SIZE // 2
 # metodología (S1–S4): indexarla deja que el LLM la cite como respaldo de umbrales que no
 # contiene (plan F2-06, ADR-0013). Se vuelve a indexar cuando tenga contenido clínico.
 EXCLUDED_GUIDES = {
+    "README.md": "documentación de la carpeta, no es una guía clínica",
     "ADA_2024.md": "solo introducción y metodología; sin contenido clínico (F2-06)",
 }
 
