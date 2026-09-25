@@ -24,10 +24,16 @@ from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
-from agents.llm_factory import build_llm
+from agents.llm_factory import agent_mode, build_llm, extract_content
 
-from agents.prompts import MONITOR_HUMAN_TEMPLATE, MONITOR_SYSTEM_PROMPT
+from agents.prompts import (
+    MONITOR_HUMAN_TEMPLATE,
+    MONITOR_PLAN_HUMAN_TEMPLATE,
+    MONITOR_PLAN_SYSTEM_PROMPT,
+    MONITOR_SYSTEM_PROMPT,
+)
 from orchestrator.state import (
     AgentState,
     Alert,
@@ -187,6 +193,48 @@ def _build_monitor_llm():
     return build_llm(MONITOR_TOOLS)
 
 
+class MonitorPlan(BaseModel):
+    """Decisión del LLM del Monitor en modo lean: sobre qué ventana analizar y por qué."""
+    last_n_months: Optional[int] = Field(
+        default=None, ge=1,
+        description="Últimos N meses a analizar; null = toda la serie (si el médico no pidió un período).",
+    )
+    rationale: str = Field(description="Una oración: por qué esa ventana y qué conviene mirar.")
+
+
+def _build_plan_llm():
+    """LLM del Monitor en modo lean: una sola llamada con salida estructurada (ADR-0015)."""
+    return build_llm().with_structured_output(MonitorPlan)
+
+
+def run_monitor_plan(state: AgentState) -> MonitorAnalysis:
+    """
+    Monitor en modo lean (ADR-0015): el LLM decide el "hasta cuándo" (ventana) en UNA llamada
+    estructurada y el código calcula todo con las mismas tools determinísticas (_build_analysis).
+    Mismo contrato A+C que el loop ReAct, con ~1 llamada en lugar de ~11.
+    """
+    patient_id = state.get("patient_id", "")
+    metrics = load_patient_data(patient_id)
+    human = MONITOR_PLAN_HUMAN_TEMPLATE.format(
+        patient_id=patient_id,
+        query=state.get("query") or "(sin consulta específica)",
+        doctor_context=state.get("doctor_context") or "(sin contexto adicional)",
+        records=len(metrics.dates),
+        first=metrics.dates[0].isoformat(),
+        last=metrics.dates[-1].isoformat(),
+    )
+    plan: MonitorPlan = _build_plan_llm().invoke([
+        SystemMessage(content=MONITOR_PLAN_SYSTEM_PROMPT),
+        HumanMessage(content=human),
+    ])
+    logger.info("Monitor (lean): ventana=%s · %s", plan.last_n_months or "global", plan.rationale)
+
+    window = TimeRange(last_n_months=plan.last_n_months) if plan.last_n_months else TimeRange()
+    analysis = _build_analysis(patient_id, CollectedResults(analysis_window=window))
+    analysis.monitor_notes = plan.rationale
+    return analysis
+
+
 def run_monitor_agent(state: AgentState) -> MonitorAnalysis:
     """
     Ejecuta el Agente Monitor como un loop ReAct manual:
@@ -200,6 +248,9 @@ def run_monitor_agent(state: AgentState) -> MonitorAnalysis:
     programáticamente como fallback (las tools son determinísticas y ya se
     ejecutaron durante el loop).
     """
+    if agent_mode() == "lean":
+        return run_monitor_plan(state)
+
     patient_id = state.get("patient_id", "")
     query = state.get("query", "")
     doctor_context = state.get("doctor_context", "") or ""
@@ -260,7 +311,10 @@ def run_monitor_agent(state: AgentState) -> MonitorAnalysis:
     # Construir MonitorAnalysis con fallback programático
     # (El LLM razonó y ejecutó las tools; ahora ensamblamos los resultados
     # de forma determinística para no depender del parsing de la respuesta del LLM.)
-    return _build_analysis(patient_id, collected)
+    analysis = _build_analysis(patient_id, collected)
+    # La respuesta final del LLM (su criterio de ventana y foco) queda auditable (F3-03).
+    analysis.monitor_notes = (extract_content(response) or "").strip()[:500] or None
+    return analysis
 
 
 def _timerange_from_args(tool_args: dict) -> TimeRange:

@@ -134,6 +134,7 @@ def test_refinamiento_amplia_ventana_acotada(app, monkeypatch):
     def _clinico_sin_llm(state):
         raise RuntimeError("sin LLM en el test: usar el fallback del Clínico")
 
+    monkeypatch.setenv("AGENT_MODE", "react")  # guion del loop ReAct del Monitor (ADR-0015)
     monkeypatch.setattr(graph, "has_api_key", lambda: True)
     monkeypatch.setattr(agents.monitor, "_build_monitor_llm", lambda: _MonitorGuionado())
     monkeypatch.setattr(agents.clinical, "run_clinical_agent", _clinico_sin_llm)

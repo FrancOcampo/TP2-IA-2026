@@ -157,6 +157,10 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
     postprandial ≥ 180 / > 300). Cada banda declara comparador y fuente. 🩺 Pendiente de
     validación clínica del equipo.
 
+13. **Modo de los agentes** (ADR-0015): `AGENT_MODE=lean` (default, free tier) hace el Monitor en
+    1 llamada estructurada y precarga historial y comparación para el Clínico; `react` usa los loops
+    completos. El contexto que va a los LLM siempre pasa por `agents/context.py` (compacto).
+
 ## Convenciones
 
 - Match el estilo del código circundante; comentarios y prompts en español.

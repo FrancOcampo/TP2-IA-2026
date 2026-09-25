@@ -45,6 +45,17 @@ def build_llm(tools: list[Any] | None = None):
     return _build_groq(tools)
 
 
+def agent_mode() -> str:
+    """
+    Modo de los agentes (ADR-0015), leído en cada llamada:
+      - "lean" (default): pocas llamadas al LLM, pensado para el free tier (8000 tokens/min).
+      - "react": loops ReAct completos (Monitor y Clínico eligen todas sus tools). Requiere más
+        cuota: activarlo al pasar a una API paga (AGENT_MODE=react en .env).
+    """
+    mode = os.getenv("AGENT_MODE", "lean").lower()
+    return mode if mode in ("lean", "react") else "lean"
+
+
 def active_model() -> tuple[str, str]:
     """Proveedor y modelo activos: LLM_MODEL si está definido, si no el default del proveedor."""
     provider = _provider()
@@ -88,11 +99,25 @@ def extract_content(response) -> str:
     return content
 
 
+# Modelos de razonamiento: consumen tokens "pensando" antes de responder. Sin límite de esfuerzo,
+# gpt-oss gastó los 2048 tokens por defecto en razonar y devolvió una respuesta VACÍA
+# (finish_reason=length). "low" alcanza para redactar reportes y cuesta ~1/3 de tokens.
+_REASONING_MODEL_PREFIXES = ("openai/gpt-oss",)
+
+
+def generation_kwargs(model: str) -> dict:
+    """Límite de salida y esfuerzo de razonamiento (configurables por env; ADR-0015)."""
+    kwargs: dict[str, Any] = {"max_tokens": int(os.getenv("LLM_MAX_TOKENS", "4096"))}
+    if model.startswith(_REASONING_MODEL_PREFIXES):
+        kwargs["reasoning_effort"] = os.getenv("LLM_REASONING_EFFORT", "low")
+    return kwargs
+
+
 def _build_groq(tools):
     from langchain_groq import ChatGroq
 
     _, model = active_model()
-    llm = ChatGroq(model=model, temperature=0, api_key=_api_key())
+    llm = ChatGroq(model=model, temperature=0, api_key=_api_key(), **generation_kwargs(model))
     return llm.bind_tools(tools) if tools else llm
 
 
