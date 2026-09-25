@@ -22,7 +22,9 @@
    con `LLM_FALLBACK_MODELS` (lista separada por comas; vacío = sin respaldo).
 3. La cadena aplica igual a tools (`bind_tools`) y a salida estructurada (`build_llm(structured_output=...)`), porque
    cada modelo se configura antes de encadenarlo.
-4. `max_retries=1` en Groq: ante una cuota agotada conviene pasar rápido al respaldo en lugar de reintentar.
+4. Reintentos: `max_retries=1` en los modelos intermedios (pasar rápido al respaldo) y 4 en el **último** de la
+   cadena, que respeta el `retry-after` del proveedor. Sin esto, cuando el principal falla rápido, todos los pasos
+   caen sobre el respaldo en el mismo minuto y agotan su límite por minuto (eval `edge_04`).
 5. `llm_status()` (banner de la UI) muestra el principal y el respaldo.
 
 ## Alternativas consideradas
