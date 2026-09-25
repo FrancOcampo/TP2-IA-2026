@@ -132,3 +132,18 @@ def test_el_readme_de_la_carpeta_no_es_una_guia(tmp_path):
     (tmp_path / "README.md").write_text("# Guías\n\nDocumentación de la carpeta.", encoding="utf-8")
     (tmp_path / "guia.md").write_text("# Metas\n\nHbA1c < 7 %.", encoding="utf-8")
     assert [d["source"] for d in ingest.load_markdown_files(tmp_path, verbose=False)] == ["guia.md"]
+
+
+def test_balance_de_fuentes_reparte_el_top_k():
+    """Una guía grande no debe copar el top-k: el mejor de cada fuente entra primero."""
+    candidatos = [("nacional", "n1"), ("nacional", "n2"), ("nacional", "n3"),
+                  ("ada", "a1"), ("sad", "s1"), ("ada", "a2")]
+    elegidos = retriever._balance_sources(candidatos, k=3)
+    assert elegidos == [("nacional", "n1"), ("ada", "a1"), ("sad", "s1")]
+
+
+def test_balance_de_fuentes_completa_con_rondas_si_hay_pocas_fuentes():
+    candidatos = [("nacional", "n1"), ("nacional", "n2"), ("ada", "a1"), ("nacional", "n3")]
+    assert retriever._balance_sources(candidatos, k=3) == [("nacional", "n1"), ("ada", "a1"), ("nacional", "n2")]
+    assert retriever._balance_sources([], k=3) == []
+    assert retriever._balance_sources([("solo", "x")], k=3) == [("solo", "x")]

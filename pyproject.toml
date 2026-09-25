@@ -19,6 +19,7 @@ dependencies = [
     "pymongo>=4.10.0",
     "python-dotenv>=1.2.2",
     "streamlit>=1.58.0",
+    "fastembed>=0.8.1",
 ]
 
 [dependency-groups]

@@ -33,7 +33,7 @@ código. Ver también [docs/logs.md](docs/logs.md) (cómo leer las trazas/observ
 
 - **uv** gestiona el entorno (instalado en `C:\Users\marco\.local\bin`; en terminales
   nuevas ya está en el PATH).
-- LLM: Groq `openai/gpt-oss-120b` por defecto (ADR-0014; free tier: 8000 tokens/min y 200k/día por modelo) con respaldo `gpt-oss-20b` (`LLM_FALLBACK_MODELS`, ADR-0016) (`LLM_PROVIDER`/`LLM_MODEL`; defaults en `agents/llm_factory.DEFAULT_MODELS`; Gemini acepta `GOOGLE_API_KEY` o `GEMINI_API_KEY`) · Embeddings: **locales en proceso** (ONNX MiniLM de ChromaDB; Ollama opcional vía `EMBEDDING_PROVIDER`, ADR-0006) · Vector store:
+- LLM: Groq `openai/gpt-oss-120b` por defecto (ADR-0014; free tier: 8000 tokens/min y 200k/día por modelo) con respaldo `gpt-oss-20b` (`LLM_FALLBACK_MODELS`, ADR-0016) (`LLM_PROVIDER`/`LLM_MODEL`; defaults en `agents/llm_factory.DEFAULT_MODELS`; Gemini acepta `GOOGLE_API_KEY` o `GEMINI_API_KEY`) · Embeddings: **multilingües locales en proceso** (fastembed `paraphrase-multilingual-MiniLM-L12-v2`; `local` y Ollama opcionales vía `EMBEDDING_PROVIDER`, ADR-0017) · Vector store:
   ChromaDB (solo guías) · Historial: **SQLite local** por defecto, MongoDB opcional (`HISTORY_BACKEND`, ADR-0005) · Validación: Pydantic v2 ·
   Interfaz: **Gradio** (decisión del equipo; la dependencia `streamlit` sigue en
   `pyproject.toml` pero no se usa) · Observabilidad: **LangSmith + logging propio**

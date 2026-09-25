@@ -15,6 +15,9 @@ from rag.config import CHROMA_DIR, COLLECTION_NAME, embedding_id, get_embedding_
 # TUNABLE: cuántos fragmentos devolver por consulta. Ver RAG_TUNING.md → "k (top-k)".
 DEFAULT_K = 3
 
+# Candidatos que se piden por cada fragmento devuelto, para poder repartirlos entre guías.
+CANDIDATE_FACTOR = 4
+
 logger = logging.getLogger(__name__)
 
 _MISSING_INDEX_MSG = (
@@ -45,12 +48,32 @@ def _get_collection() -> chromadb.Collection:
     return col
 
 
+def _balance_sources(candidates: list[tuple[str, str]], k: int) -> list[tuple[str, str]]:
+    """
+    Elige `k` fragmentos repartidos entre las guías: primero el mejor de cada fuente (en el orden
+    de relevancia de sus mejores fragmentos) y después se repite por ronda. Sin esto, una guía
+    grande (la Guía Nacional tiene ~1900 fragmentos) copa el top-k y las demás no llegan a citarse
+    aunque tengan el fragmento que respalda un umbral (p. ej. la ADA para hipoglucemia nivel 2).
+    `candidates` viene ordenado de más a menos relevante.
+    """
+    by_source: dict[str, list[tuple[str, str]]] = {}
+    for source, doc in candidates:
+        by_source.setdefault(source, []).append((source, doc))
+    ordered, round_idx = [], 0
+    while len(ordered) < k and any(len(v) > round_idx for v in by_source.values()):
+        for items in by_source.values():
+            if len(items) > round_idx and len(ordered) < k:
+                ordered.append(items[round_idx])
+        round_idx += 1
+    return ordered
+
+
 def search_clinical_guidelines(query: str, k: int = DEFAULT_K) -> list[str]:
     """
     Busca en ChromaDB los `k` fragmentos de guías clínicas más relevantes para `query`.
 
-    Devuelve una lista de strings (los fragmentos), ordenados de mayor a menor
-    similitud. Lista vacía si la colección está vacía, no hay resultados, o si
+    Devuelve una lista de strings (los fragmentos), repartidos entre las guías (mejor fragmento
+    de cada una primero) y dentro de cada guía de mayor a menor similitud. Lista vacía si la colección está vacía, no hay resultados, o si
     el índice no está disponible (se loguea un error claro una vez).
 
     Parámetro tunable principal: `k`. Ver RAG_TUNING.md → "k (top-k)".
@@ -59,7 +82,8 @@ def search_clinical_guidelines(query: str, k: int = DEFAULT_K) -> list[str]:
         col = _get_collection()
         results = col.query(
             query_texts=[query],
-            n_results=k,
+            # Se piden más candidatos que `k` para poder balancear las fuentes (ver _balance_sources).
+            n_results=max(k * CANDIDATE_FACTOR, k),
             # TUNABLE: qué campos incluir en la respuesta. "documents" son los textos;
             # "metadatas" incluye la fuente (nombre del archivo) y el chunk_index.
             # Agregar "distances" si querés filtrar por score mínimo (ver RAG_TUNING.md).
@@ -75,13 +99,12 @@ def search_clinical_guidelines(query: str, k: int = DEFAULT_K) -> list[str]:
         # descarta fragmentos poco relevantes. Ver RAG_TUNING.md → "Umbral de distancia".
         DISTANCE_THRESHOLD = 1.0  # 1.0 = sin filtro (acepta todo); bajar para ser más estricto
 
-        filtered = []
-        for doc, dist, meta in zip(documents, distances, metadatas):
-            if dist < DISTANCE_THRESHOLD:
-                source = meta.get("source", "Guía Desconocida")
-                filtered.append(f"[{source}] {doc}")
-
-        return filtered
+        candidates = [
+            (meta.get("source", "Guía Desconocida"), doc)
+            for doc, dist, meta in zip(documents, distances, metadatas)
+            if dist < DISTANCE_THRESHOLD
+        ]
+        return [f"[{source}] {doc}" for source, doc in _balance_sources(candidates, k)]
     except RagIndexUnavailable as e:
         # Error de configuración, no transitorio: se avisa claro una sola vez por proceso.
         global _warned_missing_index
