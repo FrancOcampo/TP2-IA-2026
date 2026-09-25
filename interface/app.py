@@ -22,6 +22,7 @@ from orchestrator.graph import app as langgraph_app
 from interface.logging_config import setup_logging, get_callbacks, tracing_status
 from interface.components import (
     alerts_table,
+    execution_warning,
     eval_case_choices,
     eval_case_view,
     eval_history_summary_md,
@@ -115,14 +116,19 @@ def analyze(patient_id: str, doctor_context: str):
 
     analysis = out.get("analysis")
     alerts = analysis.alerts if analysis else []
+    aviso = execution_warning(out.get("execution_mode"))
     chat = [{
         "role": "assistant",
         "content": (
             f"✅ Análisis de **{patient_id}** completado: {len(alerts)} alerta(s). "
             "El reporte está en el panel principal. Hacé tu pregunta de seguimiento abajo."
+            + (f"\n\n{aviso}" if aviso else "")
         ),
     }]
-    return chat, thread_id, format_report(out.get("report")), alerts_table(alerts), trends_view(analysis)
+    reporte = format_report(out.get("report"))
+    if aviso:
+        reporte = f"{aviso}\n\n{reporte}"
+    return chat, thread_id, reporte, alerts_table(alerts), trends_view(analysis)
 
 
 def follow_up(message: str, history: list, thread_id: str):
@@ -141,6 +147,9 @@ def follow_up(message: str, history: list, thread_id: str):
         before = langgraph_app.get_state(_config(thread_id)).values.get("active_patient_id")
         out = langgraph_app.invoke({"query": message}, _config(thread_id))
         reply = _last_assistant(out.get("conversation", []))
+        aviso = execution_warning(out.get("execution_mode"))
+        if aviso:
+            reply += f"\n\n{aviso}"
         after = out.get("active_patient_id")
         if before and after and after != before:
             # El grafo cambió de paciente (ADR-0004), pero los paneles no se actualizan desde el chat.

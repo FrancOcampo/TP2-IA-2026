@@ -62,7 +62,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F3-03** | [EAS-22](https://linear.app/easymetricdev/issue/EAS-22) | Flags del Monitor coherentes y notas del plan del LLM | 🟡 Media | F1-05 | ⬜ |
 | **F3-04** | [EAS-23](https://linear.app/easymetricdev/issue/EAS-23) | Reporte clínico estructurado, citas validadas y disclaimer por código | 🟠 Alta | F2-05 | 🟨 (validador de citas adelantado al MVP) |
 | **F3-05** | [EAS-24](https://linear.app/easymetricdev/issue/EAS-24) | Contexto del modo seguimiento compacto | 🟢 Baja | F1-03 | ✅ (adelantado al MVP, ADR-0015) |
-| **F3-06** | [EAS-25](https://linear.app/easymetricdev/issue/EAS-25) | Robustez de tools y marca de modo de ejecución en el estado | 🟡 Media | — | ⬜ |
+| **F3-06** | [EAS-25](https://linear.app/easymetricdev/issue/EAS-25) | Robustez de tools y marca de modo de ejecución en el estado | 🟡 Media | — | 🟨 (`execution_mode` + aviso en la UI, ADR-0018; respuesta forzada ya hecha) |
 | **F3-07** | [EAS-26](https://linear.app/easymetricdev/issue/EAS-26) | Campo "Orientación del análisis" en la UI | 🟢 Baja | F3-01 | ⬜ |
 | **F4-01** | [EAS-27](https://linear.app/easymetricdev/issue/EAS-27) | Modelo por defecto alineado con el artículo | 🟢 Baja | — | ✅ (MVP-03) |
 | **F4-02** | [EAS-28](https://linear.app/easymetricdev/issue/EAS-28) | Serialización de modelos Pydantic en el checkpointer | 🟡 Media | — | ⬜ |
@@ -658,7 +658,7 @@ Ver §9.
 | `AgentState` | `awaiting_confirmation` → `save_requested: bool`; `+ save_result: Optional[dict]`; `+ analysis_query: Optional[str]` | F1-04 |
 | `AgentState` | `+ refinement_request: Optional[list[RefinementRequest]]` | F3-02 |
 | `AgentState` | `+ report_structured: Optional[ClinicalReport]` | F3-04 |
-| `AgentState` | `+ execution_mode: dict[str, str]` | F3-06 |
+| `AgentState` | `+ execution_mode: dict[str, str]` ✅ (ADR-0018) | F3-06 |
 | `AgentState` | `longitudinal_comparison: Optional[dict[str, dict]]` (estructurado por métrica) | F2-04 |
 | `MonitorAnalysis` | `*_stats: Optional[MetricStats]`; `+ insufficient_data: dict[str, str]`; `+ records_count: int` | F1-01 |
 | `MonitorAnalysis` | `+ analysis_window: TimeRange`; `+ extra_windows: dict[str, MetricStats]` | F1-05 |
