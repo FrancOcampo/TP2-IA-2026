@@ -19,6 +19,15 @@ DEFAULT_MODELS = {
     "gemini": "gemma-4-31b-it",
 }
 
+# Cadena de respaldo (ADR-0016): si el modelo principal responde 429/413/404 (cuota diaria o por
+# minuto agotada, modelo dado de baja), la llamada se reintenta con el siguiente. En Groq cada
+# modelo tiene su propia cuota, así que la cadena suma presupuesto en el free tier.
+# qwen/qwen3.8-27b NO va: su límite de 1000 tokens de salida por minuto no alcanza para un reporte.
+DEFAULT_FALLBACK_MODELS = {
+    "groq": ("openai/gpt-oss-20b",),
+    "gemini": (),
+}
+
 # Variables aceptadas para la API key de cada proveedor, en orden de preferencia.
 _API_KEY_ENV = {
     "groq": ("GROQ_API_KEY",),
@@ -38,11 +47,41 @@ def _provider() -> str:
     return os.getenv("LLM_PROVIDER", "groq").lower()
 
 
-def build_llm(tools: list[Any] | None = None):
-    """Construye el LLM configurado según LLM_PROVIDER y le bindea las tools dadas."""
-    if _provider() == "gemini":
-        return _build_gemini(tools)
-    return _build_groq(tools)
+def build_llm(tools: list[Any] | None = None, structured_output: Any = None):
+    """
+    Construye el LLM configurado según LLM_PROVIDER, con las tools bindeadas o con salida
+    estructurada (`structured_output`, un modelo Pydantic), y la cadena de respaldo de modelos.
+    """
+    provider, model = active_model()
+    build = _build_gemini if provider == "gemini" else _build_groq
+    chain = [model] + [m for m in fallback_models() if m != model]
+    runnables = [_configure(build(m), tools, structured_output) for m in chain]
+    if len(runnables) == 1:
+        return runnables[0]
+    return runnables[0].with_fallbacks(runnables[1:], exceptions_to_handle=_fallback_exceptions())
+
+
+def fallback_models() -> list[str]:
+    """Modelos de respaldo: LLM_FALLBACK_MODELS (separados por coma; vacío = sin respaldo) o el default."""
+    env = os.getenv("LLM_FALLBACK_MODELS")
+    if env is not None:
+        return [m.strip() for m in env.split(",") if m.strip()]
+    return list(DEFAULT_FALLBACK_MODELS.get(_provider(), ()))
+
+
+def _configure(llm, tools, structured_output):
+    if structured_output is not None:
+        return llm.with_structured_output(structured_output)
+    return llm.bind_tools(tools) if tools else llm
+
+
+def _fallback_exceptions() -> tuple[type[BaseException], ...]:
+    """Errores HTTP del proveedor (cuota, tamaño, modelo inexistente) que habilitan el respaldo."""
+    try:
+        from groq import APIStatusError
+        return (APIStatusError,)
+    except ImportError:  # pragma: no cover
+        return (Exception,)
 
 
 def agent_mode() -> str:
@@ -79,7 +118,8 @@ def llm_status() -> str:
     """Descripción del modo de ejecución, para la UI y los logs de arranque."""
     provider, model = active_model()
     if has_api_key():
-        return f"LLM activo: {provider} · {model}"
+        backups = [m for m in fallback_models() if m != model]
+        return f"LLM activo: {provider} · {model}" + (f" (respaldo: {', '.join(backups)})" if backups else "")
     expected = " o ".join(_API_KEY_ENV.get(provider, _API_KEY_ENV["groq"]))
     return (f"Sin API key de {provider} ({expected} en .env): los agentes corren en modo "
             "determinístico, sin LLM.")
@@ -113,17 +153,15 @@ def generation_kwargs(model: str) -> dict:
     return kwargs
 
 
-def _build_groq(tools):
+def _build_groq(model: str):
     from langchain_groq import ChatGroq
 
-    _, model = active_model()
-    llm = ChatGroq(model=model, temperature=0, api_key=_api_key(), **generation_kwargs(model))
-    return llm.bind_tools(tools) if tools else llm
+    # max_retries=1: ante una cuota agotada conviene pasar rápido al modelo de respaldo.
+    return ChatGroq(model=model, temperature=0, api_key=_api_key(), max_retries=1,
+                    **generation_kwargs(model))
 
 
-def _build_gemini(tools):
+def _build_gemini(model: str):
     from langchain_google_genai import ChatGoogleGenerativeAI
 
-    _, model = active_model()
-    llm = ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=_api_key())
-    return llm.bind_tools(tools) if tools else llm
+    return ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=_api_key())

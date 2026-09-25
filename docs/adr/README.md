@@ -23,6 +23,7 @@ Complementa al [plan de correcciones](../plan_correcciones.md), que dice **qué*
 | [0013](0013-corpus-sin-ada-y-huella-del-indice.md) | ADA fuera del corpus hasta tener contenido clínico, e índice con huella del corpus | Aceptado | 2026-09-24 | F2-06 · EAS-17 |
 | [0014](0014-modelo-groq-gpt-oss.md) | Modelo por defecto `openai/gpt-oss-120b` en Groq y tools con el nombre de los prompts | Aceptado | 2026-09-25 | MVP-06 · EAS-38 |
 | [0015](0015-modo-lean-para-free-tier.md) | Modo `lean` de los agentes para el free tier, con `react` listo para una API paga | Aceptado | 2026-09-25 | MVP-06 · F3-05 · EAS-38/24 |
+| [0016](0016-cadena-de-respaldo-de-modelos.md) | Cadena de respaldo de modelos LLM | Aceptado | 2026-09-25 | MVP-06 · EAS-38 |
 
 ## Plantilla
 

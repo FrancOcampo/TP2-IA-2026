@@ -168,6 +168,9 @@ Reglas estrictas para ambos modos:
   insufficient_data o no tiene estadísticas, decilo explícitamente y no infieras su tendencia
 - Mencioná solo métricas y fechas presentes en el análisis, el historial o la comparación
   (el sistema registra glucemias, HbA1c, peso y presión arterial; nada más)
+- Las metas de control son las que indica el análisis ("Metas de control del sistema"). No
+  inventes otras metas numéricas ni las atribuyas a una guía si no aparecen en un fragmento
+  recuperado
 - El disclaimer es obligatorio en el reporte y en respuestas de seguimiento
   que incluyan afirmaciones clínicas nuevas
 

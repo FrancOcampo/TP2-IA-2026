@@ -70,6 +70,7 @@ Estados: ⬜ pendiente · 🟨 en curso · ✅ hecho
 |---|---|---|
 | — | Modelo disponible en Groq (`gpt-oss-120b`), tools con el nombre de los prompts, tests `llm` que detectan fallback ([ADR-0014](adr/0014-modelo-groq-gpt-oss.md)) | ✅ |
 | F3-04 (parcial) | Precisión del reporte según la evaluación: sin tendencia con datos insuficientes, período de datos explícito, fuente del umbral fuera del prompt y **validador de citas** | ✅ |
+| — | Cadena de respaldo de modelos (`gpt-oss-120b` → `gpt-oss-20b`): duplica la cuota diaria del free tier ([ADR-0016](adr/0016-cadena-de-respaldo-de-modelos.md)) | ✅ |
 | F3-05 | Contexto compacto + `AGENT_MODE=lean` (Monitor en 1 llamada, Clínico con historial precargado) + razonamiento `low` ([ADR-0015](adr/0015-modo-lean-para-free-tier.md)) | ✅ |
 
 ## Fuera del MVP

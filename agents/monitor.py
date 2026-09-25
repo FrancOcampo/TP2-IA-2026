@@ -204,7 +204,7 @@ class MonitorPlan(BaseModel):
 
 def _build_plan_llm():
     """LLM del Monitor en modo lean: una sola llamada con salida estructurada (ADR-0015)."""
-    return build_llm().with_structured_output(MonitorPlan)
+    return build_llm(structured_output=MonitorPlan)
 
 
 def run_monitor_plan(state: AgentState) -> MonitorAnalysis:

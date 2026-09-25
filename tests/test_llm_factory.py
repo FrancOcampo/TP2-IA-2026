@@ -11,7 +11,7 @@ from agents.llm_factory import DEFAULT_MODELS, active_model, generation_kwargs, 
 @pytest.fixture(autouse=True)
 def _sin_config(monkeypatch):
     for var in ("LLM_PROVIDER", "LLM_MODEL", "GROQ_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY",
-                "LLM_MAX_TOKENS", "LLM_REASONING_EFFORT", "AGENT_MODE"):
+                "LLM_MAX_TOKENS", "LLM_REASONING_EFFORT", "AGENT_MODE", "LLM_FALLBACK_MODELS"):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -40,7 +40,7 @@ def test_key_de_otro_proveedor_no_cuenta(monkeypatch):
 def test_llm_status_explica_el_modo(monkeypatch):
     assert "GROQ_API_KEY" in llm_status() and "determinístico" in llm_status()
     monkeypatch.setenv("GROQ_API_KEY", "x")
-    assert llm_status() == "LLM activo: groq · openai/gpt-oss-120b"
+    assert llm_status() == "LLM activo: groq · openai/gpt-oss-120b (respaldo: openai/gpt-oss-20b)"
 
 
 def test_modelos_de_razonamiento_limitan_el_esfuerzo():
@@ -57,3 +57,29 @@ def test_modo_de_agentes_por_defecto_es_lean(monkeypatch):
     assert agent_mode() == "react"
     monkeypatch.setenv("AGENT_MODE", "cualquiera")
     assert agent_mode() == "lean"
+
+
+def test_cadena_de_respaldo_de_modelos(monkeypatch):
+    from agents.llm_factory import build_llm
+
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    llm = build_llm()
+    assert llm.runnable.model_name == "openai/gpt-oss-120b"
+    assert [f.model_name for f in llm.fallbacks] == ["openai/gpt-oss-20b"]
+
+    monkeypatch.setenv("LLM_FALLBACK_MODELS", "")
+    assert not hasattr(build_llm(), "fallbacks"), "LLM_FALLBACK_MODELS vacío = sin respaldo"
+
+
+def test_respaldo_tambien_con_tools_y_salida_estructurada(monkeypatch):
+    from pydantic import BaseModel
+
+    from agents.llm_factory import build_llm
+    from agents.monitor import MONITOR_TOOLS
+
+    class Plan(BaseModel):
+        x: int
+
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    assert len(build_llm(MONITOR_TOOLS).fallbacks) == 1
+    assert len(build_llm(structured_output=Plan).fallbacks) == 1

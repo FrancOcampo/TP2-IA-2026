@@ -173,3 +173,10 @@ def test_validacion_de_citas():
     assert n == 1
     assert "130 mg/dl” [Guia" in marcado, "la cita real queda intacta"
     assert '< 70 mg/dL" ⚠️ (cita no verificada)' in marcado
+
+
+def test_resumen_incluye_metas_del_sistema():
+    """eval edge_01/edge_06: sin las metas explícitas el LLM las inventaba."""
+    texto = summarize_analysis(_build_analysis("P005"))
+    assert "HbA1c (%): alerta si severa > 9, moderada >= 7" in texto
+    assert "hipoglucemia severa < 54" in texto

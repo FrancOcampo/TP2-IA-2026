@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Optional
 
 from orchestrator.state import Alert, MetricStats, MonitorAnalysis
+from tools.threshold_tools import THRESHOLDS
 
 _METRIC_LABELS = {
     "glucose_fasting": ("Glucosa en ayunas", "mg/dL"),
@@ -63,6 +64,21 @@ def _alert_groups(alerts: list[Alert]) -> list[str]:
     return lines
 
 
+def control_targets() -> str:
+    """
+    Metas de control que usa el sistema, generadas desde la tabla de umbrales (fuente única, ADR-0011).
+    Sin esto el LLM inventaba metas ("HbA1c < 6.5 %", "meta < 9 %") en la evaluación (edge_01, edge_06).
+    """
+    parts = []
+    for spec in THRESHOLDS.values():
+        bands = ", ".join(
+            f"{'hipoglucemia ' if b.side == 'baja' else ''}{b.severity} {b.comparator} {b.threshold:g}"
+            for b in spec["bands"]
+        )
+        parts.append(f"{spec['label']} ({spec['unit']}): alerta si {bands}")
+    return "; ".join(parts)
+
+
 def summarize_analysis(analysis: Optional[MonitorAnalysis], data_period: Optional[str] = None) -> str:
     """
     Resumen legible y compacto del MonitorAnalysis para los prompts del Clínico. `data_period`
@@ -79,6 +95,8 @@ def summarize_analysis(analysis: Optional[MonitorAnalysis], data_period: Optiona
         lines.append(f"Período de los registros del EHR: {data_period} (el último registro es el valor actual).")
     if analysis.monitor_notes:
         lines.append(f"Criterio del Monitor: {analysis.monitor_notes}")
+    lines.append("Metas de control del sistema (parámetros del sistema; usá estas y no otras, y no las "
+                 f"cites como texto de una guía): {control_targets()}.")
 
     lines.append("Estadísticas:")
     lines.append(_stats_line("glucose_fasting", analysis.glucose_fasting_stats, analysis.insufficient_data.get("glucose_fasting")))
