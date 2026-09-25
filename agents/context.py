@@ -28,10 +28,14 @@ def _fmt(value: float) -> str:
     return f"{value:g}"
 
 
-def _stats_line(metric: str, stats: Optional[MetricStats]) -> str:
+def _stats_line(metric: str, stats: Optional[MetricStats], insufficient: Optional[str] = None) -> str:
     label, unit = _METRIC_LABELS[metric]
     if stats is None:
         return f"- {label}: sin datos"
+    if insufficient:
+        # Sin Δ ni dirección: con 1 registro "Δ +0 · estable" invitaba al LLM a afirmar una
+        # estabilidad que no se puede observar (eval edge_01, ADR-0003).
+        return f"- {label} ({unit}): último {_fmt(stats.last_value)} · SIN tendencia evaluable ({insufficient})"
     return (f"- {label} ({unit}): último {_fmt(stats.last_value)} · media {_fmt(round(stats.mean, 1))} · "
             f"mín {_fmt(stats.min_value)} · máx {_fmt(stats.max_value)} · "
             f"Δ {stats.delta:+g} · {stats.direction}")
@@ -49,8 +53,9 @@ def _alert_groups(alerts: list[Alert]) -> list[str]:
         severities = sorted({a.severity for a in group})
         dates = sorted(a.date for a in group)
         period = dates[0].isoformat() if len(dates) == 1 else f"{dates[0].isoformat()} a {dates[-1].isoformat()}"
-        # La descripción trae umbral y fuente: basta con la del peor valor.
-        detail = worst.description.split("(", 1)[-1].rstrip(")")
+        # Umbral vulnerado del peor valor, SIN la fuente: el LLM la citaba como si fuera un
+        # fragmento recuperado de la guía (eval edge_03). Las citas salen solo del RAG.
+        detail = worst.description.split("(", 1)[-1].rstrip(")").split(";", 1)[0]
         lines.append(
             f"- {label}{' (hipoglucemia)' if is_hypo else ''}: {len(group)} registro(s) "
             f"[{', '.join(severities)}], {period}; peor valor {_fmt(worst.value)} {unit} ({detail})"
@@ -58,8 +63,11 @@ def _alert_groups(alerts: list[Alert]) -> list[str]:
     return lines
 
 
-def summarize_analysis(analysis: Optional[MonitorAnalysis]) -> str:
-    """Resumen legible y compacto del MonitorAnalysis para los prompts del Clínico."""
+def summarize_analysis(analysis: Optional[MonitorAnalysis], data_period: Optional[str] = None) -> str:
+    """
+    Resumen legible y compacto del MonitorAnalysis para los prompts del Clínico. `data_period`
+    ("AAAA-MM-DD a AAAA-MM-DD") evita que el LLM invente fechas (eval happy_02).
+    """
     if analysis is None:
         return "(sin análisis del Monitor)"
     window = analysis.analysis_window
@@ -67,16 +75,18 @@ def summarize_analysis(analysis: Optional[MonitorAnalysis]) -> str:
                   else f"últimos {window.last_n_months} meses" if window.last_n_months
                   else f"{window.start or '…'} a {window.end or '…'}")
     lines = [f"Ventana analizada: {window_txt} ({analysis.records_count} registro(s) mensuales)."]
+    if data_period:
+        lines.append(f"Período de los registros del EHR: {data_period} (el último registro es el valor actual).")
     if analysis.monitor_notes:
         lines.append(f"Criterio del Monitor: {analysis.monitor_notes}")
 
     lines.append("Estadísticas:")
-    lines.append(_stats_line("glucose_fasting", analysis.glucose_fasting_stats))
-    lines.append(_stats_line("hba1c", analysis.hba1c_stats))
-    lines.append(_stats_line("glucose_postprandial", analysis.glucose_postprandial_stats))
-    lines.append(_stats_line("weight", analysis.weight_stats))
-    lines.append(_stats_line("blood_pressure_systolic", analysis.blood_pressure_stats.systolic))
-    lines.append(_stats_line("blood_pressure_diastolic", analysis.blood_pressure_stats.diastolic))
+    lines.append(_stats_line("glucose_fasting", analysis.glucose_fasting_stats, analysis.insufficient_data.get("glucose_fasting")))
+    lines.append(_stats_line("hba1c", analysis.hba1c_stats, analysis.insufficient_data.get("hba1c")))
+    lines.append(_stats_line("glucose_postprandial", analysis.glucose_postprandial_stats, analysis.insufficient_data.get("glucose_postprandial")))
+    lines.append(_stats_line("weight", analysis.weight_stats, analysis.insufficient_data.get("weight")))
+    lines.append(_stats_line("blood_pressure_systolic", analysis.blood_pressure_stats.systolic, analysis.insufficient_data.get("blood_pressure_systolic")))
+    lines.append(_stats_line("blood_pressure_diastolic", analysis.blood_pressure_stats.diastolic, analysis.insufficient_data.get("blood_pressure_diastolic")))
 
     if analysis.alerts:
         lines.append(f"Alertas ({len(analysis.alerts)} en total, agrupadas):")
@@ -110,6 +120,42 @@ def metrics_summary(analysis: MonitorAnalysis) -> dict[str, float]:
         "blood_pressure_diastolic": analysis.blood_pressure_stats.diastolic,
     }
     return {name: stats.last_value for name, stats in series.items() if stats is not None}
+
+
+_QUOTE_RE = None
+
+
+def _normalize(text: str) -> str:
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9<>=%.]+", " ", text).strip()
+
+
+def validate_citations(report: str, rag_context: list[str]) -> tuple[str, int]:
+    """
+    Marca las citas textuales del reporte que NO aparecen en los fragmentos recuperados por el RAG
+    (F3-04, parcial). Una cita es un texto entre comillas de al menos 15 caracteres. Devuelve el
+    reporte con "⚠️ (cita no verificada)" después de cada cita inventada y la cantidad marcada.
+    """
+    import re
+
+    global _QUOTE_RE
+    if _QUOTE_RE is None:
+        _QUOTE_RE = re.compile(r'[“"«]([^”"»\n]{15,}?)[”"»]')
+    corpus = _normalize(" ".join(rag_context or []))
+    unverified = 0
+
+    def _check(match):
+        nonlocal unverified
+        quote = _normalize(match.group(1).strip(" .…"))
+        if quote and quote in corpus:
+            return match.group(0)
+        unverified += 1
+        return match.group(0) + " ⚠️ (cita no verificada)"
+
+    return _QUOTE_RE.sub(_check, report), unverified
 
 
 def compact_history(doc: dict, max_sessions: int = 3) -> dict:

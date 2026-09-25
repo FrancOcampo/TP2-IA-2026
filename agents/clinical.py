@@ -22,7 +22,13 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 
-from agents.context import compact_history, metrics_summary, recent_conversation, summarize_analysis
+from agents.context import (
+    compact_history,
+    metrics_summary,
+    recent_conversation,
+    summarize_analysis,
+    validate_citations,
+)
 from agents.llm_factory import agent_mode, build_llm, extract_content
 
 from agents.prompts import (
@@ -34,6 +40,7 @@ from agents.prompts import (
 from orchestrator.state import AgentState
 from tools.history_tools import compare_with_previous_sessions, get_patient_history
 from rag.retriever import search_clinical_guidelines
+from tools.patient_tools import load_patient_data
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +115,15 @@ def _build_answer_llm():
     return build_llm()
 
 
+def _data_period(patient_id: str) -> str | None:
+    """Rango de fechas del EHR del paciente, para que el LLM no invente fechas."""
+    try:
+        dates = load_patient_data(patient_id).dates
+        return f"{dates[0].isoformat()} a {dates[-1].isoformat()}"
+    except (FileNotFoundError, ValueError):
+        return None
+
+
 def _prefetch_longitudinal(patient_id: str, analysis) -> tuple[dict, dict]:
     """Historial compacto y comparación con la sesión anterior, calculados por código (modo lean)."""
     history = compact_history(get_patient_history(patient_id))
@@ -144,13 +160,13 @@ def run_clinical_agent(state: AgentState) -> dict[str, Any]:
     if is_followup:
         human_msg_content = CLINICAL_HUMAN_TEMPLATE_FOLLOWUP.format(
             report=existing_report,
-            analysis=summarize_analysis(analysis),
+            analysis=summarize_analysis(analysis, _data_period(patient_id)),
             conversation=recent_conversation(state.get("conversation", [])),
             query=query,
         )
     else:
         human_msg_content = CLINICAL_HUMAN_TEMPLATE_REPORT.format(
-            analysis=summarize_analysis(analysis),
+            analysis=summarize_analysis(analysis, _data_period(patient_id)),
             doctor_context=doctor_context or "(sin contexto adicional)",
             query=query,
         )
@@ -207,6 +223,12 @@ def run_clinical_agent(state: AgentState) -> dict[str, Any]:
         # Nunca se guarda un reporte vacío: se falla fuerte y el nodo cae al fallback (logueado).
         finish = (getattr(response, "response_metadata", {}) or {}).get("finish_reason")
         raise RuntimeError(f"el LLM devolvió una respuesta vacía (finish_reason={finish})")
+
+    # Citas textuales que no provienen de ningún fragmento recuperado quedan marcadas (F3-04).
+    rag_texts = collected_rag_context + list(state.get("rag_context") or [])
+    final_content, unverified = validate_citations(final_content, rag_texts)
+    if unverified:
+        logger.warning("Clínico: %d cita(s) no verificadas contra los fragmentos del RAG", unverified)
 
     # Modo seguimiento: la respuesta va a `followup_answer` y el reporte de la sesión no se
     # toca (D3). No hay evaluación de suficiencia: el refinamiento es solo del modo reporte.

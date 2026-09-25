@@ -60,7 +60,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F3-01** | [EAS-20](https://linear.app/easymetricdev/issue/EAS-20) | Orquestador con salida estructurada del LLM (+ nodo de aclaración) | 🟠 Alta | F1-02, F1-04 | ⬜ |
 | **F3-02** | [EAS-21](https://linear.app/easymetricdev/issue/EAS-21) | Loop de refinamiento real: suficiencia estructurada + pedido concreto al Monitor | 🟠 Alta | F1-05, F1-06 | ⬜ |
 | **F3-03** | [EAS-22](https://linear.app/easymetricdev/issue/EAS-22) | Flags del Monitor coherentes y notas del plan del LLM | 🟡 Media | F1-05 | ⬜ |
-| **F3-04** | [EAS-23](https://linear.app/easymetricdev/issue/EAS-23) | Reporte clínico estructurado, citas validadas y disclaimer por código | 🟠 Alta | F2-05 | ⬜ |
+| **F3-04** | [EAS-23](https://linear.app/easymetricdev/issue/EAS-23) | Reporte clínico estructurado, citas validadas y disclaimer por código | 🟠 Alta | F2-05 | 🟨 (validador de citas adelantado al MVP) |
 | **F3-05** | [EAS-24](https://linear.app/easymetricdev/issue/EAS-24) | Contexto del modo seguimiento compacto | 🟢 Baja | F1-03 | ✅ (adelantado al MVP, ADR-0015) |
 | **F3-06** | [EAS-25](https://linear.app/easymetricdev/issue/EAS-25) | Robustez de tools y marca de modo de ejecución en el estado | 🟡 Media | — | ⬜ |
 | **F3-07** | [EAS-26](https://linear.app/easymetricdev/issue/EAS-26) | Campo "Orientación del análisis" en la UI | 🟢 Baja | F3-01 | ⬜ |
@@ -68,7 +68,7 @@ uv run python tests/eval_runner.py                   # evaluación cualitativa c
 | **F4-02** | [EAS-28](https://linear.app/easymetricdev/issue/EAS-28) | Serialización de modelos Pydantic en el checkpointer | 🟡 Media | — | ⬜ |
 | **F4-03** | [EAS-29](https://linear.app/easymetricdev/issue/EAS-29) | Limpieza de dependencias y `main.py` | 🟢 Baja | — | 🟨 (`main.py` y `description` en MVP-04; falta limpiar dependencias) |
 | **F4-04** | [EAS-30](https://linear.app/easymetricdev/issue/EAS-30) | Codificación UTF-8 de logs en consola Windows | 🟢 Baja | — | ✅ (MVP-04) |
-| **F4-05** | [EAS-31](https://linear.app/easymetricdev/issue/EAS-31) | Casos de evaluación nuevos | 🟡 Media | F1-*, F2-01 | ⬜ |
+| **F4-05** | [EAS-31](https://linear.app/easymetricdev/issue/EAS-31) | Casos de evaluación nuevos | 🟡 Media | F1-*, F2-01 | 🟨 (edge_04, edge_06, adv_04 y expectativas actualizadas; faltan edge_05 y adv_05) |
 | **F4-06** | [EAS-32](https://linear.app/easymetricdev/issue/EAS-32) | Sincronizar documentación y artículo | 🟡 Media | todo | ⬜ |
 
 **Prioridad actual:** el [plan MVP](plan_mvp.md) define qué ítems entran al MVP y en qué orden.
@@ -562,7 +562,7 @@ El wrapper solo recibe `query` ([clinical.py:59-66](../agents/clinical.py#L59));
        limitations: list[str]
    ```
 2. El paso final del Clínico usa `with_structured_output(ClinicalReport)`; `report` (markdown) lo **renderiza el código** (`components.render_report`) y le **agrega el disclaimer** (D8). Guardar también `report_structured`.
-3. Validación: cada `Citation.fragment` debe aparecer (normalizado) en algún texto de `rag_context`; si no, se marca `⚠️ cita no verificada` en el render y se loguea.
+3. Validación: cada `Citation.fragment` debe aparecer (normalizado) en algún texto de `rag_context`; si no, se marca `⚠️ cita no verificada` en el render y se loguea. **✅ Adelantado al MVP sobre el texto libre** (`agents/context.validate_citations`): la evaluación con LLM real mostró citas inventadas (caso `edge_03`).
 4. Fallbacks y seguimientos también pasan por el render con disclaimer.
 5. `suggested_questions` se persiste en `save_node` (F1-04).
 
