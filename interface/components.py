@@ -152,6 +152,29 @@ def trends_view(analysis: Optional[MonitorAnalysis]) -> str:
 # Perfil resumido del paciente
 # -------------------------------------------------------------------
 
+_FALLBACK_MOTIVOS = {
+    "rate_limit": "se agotó la cuota del proveedor del LLM (límite de tokens)",
+    "too_large": "el pedido superó el tamaño que admite el modelo",
+    "no_api_key": "no hay API key de LLM configurada en .env",
+    "error": "el LLM devolvió un error (ver logs/agent.jsonl)",
+}
+
+
+def execution_warning(execution_mode: Optional[dict]) -> str:
+    """
+    Aviso visible cuando algún agente cayó al fallback determinístico (F3-06). Devuelve "" si todos
+    los nodos usaron el LLM. Sin esto, una cuota agotada se ve como un reporte pobre sin explicación.
+    """
+    caidos = {node: mode for node, mode in (execution_mode or {}).items() if str(mode).startswith("fallback")}
+    if not caidos:
+        return ""
+    motivos = {m.split(":", 1)[1] if ":" in m else "error" for m in caidos.values()}
+    detalle = "; ".join(_FALLBACK_MOTIVOS.get(m, _FALLBACK_MOTIVOS["error"]) for m in sorted(motivos))
+    nodos = " y ".join(sorted(caidos))
+    return (f"⚠️ **El LLM no respondió ({nodos}): {detalle}.** Lo que ves es el resultado determinístico y "
+            "básico, sin interpretación clínica. Probá de nuevo en unos minutos.")
+
+
 def patient_profile(
     patient_id: str,
     metrics: Optional[PatientMetrics],

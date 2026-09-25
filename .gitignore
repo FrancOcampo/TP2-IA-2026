@@ -242,6 +242,4 @@ graphify-out/
 data/tp2.db
 data/tp2.db-*
 
-# Secciones de las ADA Standards of Care 2024: texto con copyright de la ADA, no se versiona.
-# Cada persona lo descarga y lo convierte (ver data/guias/README.md).
-data/guias/ADA_2024_S*.md
+

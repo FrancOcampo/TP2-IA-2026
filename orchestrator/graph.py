@@ -28,6 +28,21 @@ logger = logging.getLogger(__name__)
 # Nodo Orquestador
 # -------------------------------------------------------------------
 
+def _fallback_reason(error: BaseException) -> str:
+    """Motivo legible-por-máquina de una caída al fallback, a partir del error del proveedor."""
+    text = str(error).lower()
+    if "429" in text or "rate limit" in text or "rate_limit" in text:
+        return "rate_limit"
+    if "413" in text or "request too large" in text:
+        return "too_large"
+    return "error"
+
+
+def _with_mode(state: AgentState, node: str, mode: str) -> dict:
+    """Actualiza `execution_mode` de un nodo sin pisar el de los demás."""
+    return {**(state.get("execution_mode") or {}), node: mode}
+
+
 def _reset_patient_scope() -> dict:
     """
     Campos derivados de un análisis que no deben sobrevivir a un cambio de paciente o a
@@ -46,6 +61,7 @@ def _reset_patient_scope() -> dict:
         "followup_answer": None,
         "analysis_query": None,
         "save_result": None,
+        "execution_mode": {},
         "error": None,
     }
 
@@ -202,7 +218,7 @@ def monitor_node(state: AgentState) -> AgentState:
     # Si no hay API key, usar el fallback determinístico sin LLM
     if not has_api_key():
         logger.warning("Monitor: sin API key, ejecutando fallback determinístico")
-        return _monitor_fallback(state)
+        return _monitor_fallback(state, reason="no_api_key")
 
     try:
         from agents.monitor import run_monitor_agent
@@ -219,6 +235,7 @@ def monitor_node(state: AgentState) -> AgentState:
 
         return {
             "analysis": analysis,
+            "execution_mode": _with_mode(state, "monitor", "llm"),
             "conversation": [{
                 "role": "assistant",
                 "content": f"[Monitor] {summary}",
@@ -226,7 +243,7 @@ def monitor_node(state: AgentState) -> AgentState:
         }
     except Exception as e:
         logger.error("Monitor: error en agente real, fallback determinístico: %s", e)
-        return _monitor_fallback(state)
+        return _monitor_fallback(state, reason=_fallback_reason(e))
 
 
 def _monitor_refinement(state: AgentState) -> AgentState:
@@ -247,7 +264,7 @@ def _monitor_refinement(state: AgentState) -> AgentState:
     }
 
 
-def _monitor_fallback(state: AgentState) -> AgentState:
+def _monitor_fallback(state: AgentState, reason: str = "error") -> AgentState:
     """
     Fallback determinístico del Monitor: ejecuta todas las tools directamente
     sin LLM y construye un MonitorAnalysis. Útil para tests y cuando no hay API key.
@@ -262,6 +279,7 @@ def _monitor_fallback(state: AgentState) -> AgentState:
 
         return {
             "analysis": analysis,
+            "execution_mode": _with_mode(state, "monitor", f"fallback:{reason}"),
             "conversation": [{
                 "role": "assistant",
                 "content": f"[Monitor fallback] Análisis determinístico del paciente {patient_id} completado.",
@@ -300,22 +318,23 @@ def clinical_node(state: AgentState) -> AgentState:
     # Si no hay API key, usar el fallback determinístico sin LLM
     if not has_api_key():
         logger.warning("Clínico: sin API key, ejecutando fallback determinístico")
-        return _clinical_fallback(state)
+        return _clinical_fallback(state, reason="no_api_key")
 
     try:
         from agents.clinical import run_clinical_agent
         updates = run_clinical_agent(state)
         # Incrementar la iteración en el nodo
         updates["iteration"] = state.get("iteration", 0) + 1
+        updates["execution_mode"] = _with_mode(state, "clinical", "llm")
         if not state.get("is_followup"):
             updates["information_sufficient"] = information_sufficient_for(state.get("analysis"))
         return updates
     except Exception as e:
         logger.error("Clínico: error en agente real, fallback determinístico: %s", e)
-        return _clinical_fallback(state)
+        return _clinical_fallback(state, reason=_fallback_reason(e))
 
 
-def _clinical_fallback(state: AgentState) -> AgentState:
+def _clinical_fallback(state: AgentState, reason: str = "error") -> AgentState:
     """
     Fallback determinístico del Clínico: genera un reporte estático según el análisis
     y las alertas. Útil para tests y cuando no hay API key.
@@ -325,6 +344,8 @@ def _clinical_fallback(state: AgentState) -> AgentState:
     patient_id = state.get("patient_id", "")
     analysis = state.get("analysis")
     iteration = state.get("iteration", 0) + 1
+
+    mode = _with_mode(state, "clinical", f"fallback:{reason}")
 
     # Seguimiento sin LLM: no se regenera el reporte (D3); se responde en followup_answer.
     if state.get("is_followup") and state.get("report"):
@@ -336,6 +357,7 @@ def _clinical_fallback(state: AgentState) -> AgentState:
             "followup_answer": answer,
             "iteration": iteration,
             "information_sufficient": True,
+            "execution_mode": mode,
             "conversation": [{"role": "assistant", "content": answer}],
         }
 
@@ -368,6 +390,7 @@ def _clinical_fallback(state: AgentState) -> AgentState:
         "report": report,
         "iteration": iteration,
         "information_sufficient": information_sufficient,
+        "execution_mode": mode,
         "conversation": [{
             "role": "assistant",
             "content": report

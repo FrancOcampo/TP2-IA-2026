@@ -180,6 +180,9 @@ class AgentState(TypedDict):
     save_result: Optional[dict]  # {"ok": bool, "session_id"?: str, "error"?: str} del último guardado
     analysis_query: Optional[str]  # consulta que originó el análisis/reporte vigente (se persiste al guardar)
     information_sufficient: bool  # señal del Clínico: False → el Orquestador reenvía al Monitor (loop de refinamiento)
+    # Cómo corrió cada nodo (F3-06): {"monitor": "llm" | "fallback:<motivo>", "clinical": ...}. El motivo es
+    # no_api_key | rate_limit | too_large | error. La UI avisa cuando un nodo cayó al fallback.
+    execution_mode: dict[str, str]
     error: Optional[str]  # error de dominio para el médico (p. ej. paciente sin datos); corta el flujo (ADR-0003)
 
     # -- Conversación médico ↔ sistema --
