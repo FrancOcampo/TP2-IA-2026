@@ -34,6 +34,8 @@ SKIP_CLASSES = {
     "js-article-jump-link", "article-content-filter", "modal", "download-slide",
     "google-scholar-ref-link", "crossref-doi", "adsDoiReference",
 }
+# Títulos que marcan el fin del contenido útil (se compara en minúsculas)
+STOP_HEADINGS = {"references", "referencias", "bibliography", "bibliografía"}
 HEADING_TAGS = {"h1": "#", "h2": "##", "h3": "###", "h4": "####", "h5": "#####", "h6": "######"}
 BLOCK_TAGS = {"p", "li", "div", "section", "ul", "ol", "table", "tr", "caption", "blockquote"}
 VOID_TAGS = {"br", "hr", "meta", "link", "input", "img", "wbr", "source", "area", "base", "col"}
@@ -53,12 +55,17 @@ class _Converter(HTMLParser):
         self.cell: list[str] | None = None
         self.row: list[str] | None = None
         self.buf: list[str] = []
+        self.stopped = False  # True tras el título de referencias: se ignora el resto
 
     # -- utilidades ---------------------------------------------------
     def _emit_block(self) -> None:
         text = re.sub(r"\s+", " ", "".join(self.buf)).strip()  # \s incluye saltos de línea y \xa0
         self.buf = []
-        if not text:
+        if self.stopped or not text:
+            return
+        if self.heading and text.lower() in STOP_HEADINGS:
+            # Desde el título "References" todo es bibliografía y texto legal: no se indexa.
+            self.stopped = True
             return
         if self.heading:
             self.out.append(f"\n{self.heading} {text}\n")
@@ -148,7 +155,7 @@ class _Converter(HTMLParser):
     # -- tablas -------------------------------------------------------
     def _flush_table(self) -> None:
         rows, self.table = self.table or [], None
-        if not rows:
+        if not rows or self.stopped:
             return
         width = max(len(r) for r in rows)
         rows = [r + [""] * (width - len(r)) for r in rows]

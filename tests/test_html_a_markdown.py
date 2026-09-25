@@ -67,3 +67,14 @@ def test_sin_cuerpo_del_articulo_falla_claro():
 def test_cuerpo_casi_vacio_falla_claro():
     with pytest.raises(ValueError, match="casi vacío"):
         conv.html_a_markdown('<div class="widget-ArticleFulltext"><p>corto</p></div>')
+
+
+def test_corta_desde_el_titulo_de_referencias():
+    html = ('<div class="widget-ArticleFulltext"><h2>Metas</h2>'
+            '<p>' + 'Contenido clínico útil. ' * 12 + '</p>'
+            '<h2>References</h2><p>Texto legal repetido en cada artículo.</p>'
+            '<h2>Otro título posterior</h2><p>Nada de esto debe quedar.</p></div>')
+    md = conv.html_a_markdown(html)
+    assert "## Metas" in md and "Contenido clínico útil" in md
+    for descartado in ("References", "Texto legal", "Otro título", "Nada de esto"):
+        assert descartado not in md, descartado
