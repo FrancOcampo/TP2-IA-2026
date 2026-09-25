@@ -36,8 +36,8 @@ cp .env.example .env         # 2. crea el entorno (Windows: Copy-Item .env.examp
 uv run python main.py        # 3. prepara historial + índice de guías (solo lo que falte) y abre la UI
 ```
 
-Abrí **http://127.0.0.1:7860**. La primera vez, `main.py` indexa las guías clínicas (~2-3 min y
-~80 MB del modelo de embeddings); después arranca en segundos. Todo es idempotente: las sesiones
+Abrí **http://127.0.0.1:7860**. La primera vez, `main.py` indexa las guías clínicas (~6 min y
+~220 MB del modelo de embeddings multilingüe); después arranca en segundos. Todo es idempotente: las sesiones
 guardadas se conservan entre arranques.
 
 **Sin API key** el sistema funciona igual en **modo determinístico** (fallbacks sin LLM) y la UI

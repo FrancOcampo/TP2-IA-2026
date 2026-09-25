@@ -15,17 +15,23 @@ Los parámetros de retrieval (`k`, `DISTANCE_THRESHOLD`) no requieren re-ingesti
 ## Ingestión (`rag/ingest.py`)
 
 ### `EMBEDDING_PROVIDER` (`.env`, definido en `rag/config.py`)
-Modelo que convierte texto en vectores numéricos ([ADR-0006](../docs/adr/0006-embeddings-locales-sin-ollama.md)).
+Modelo que convierte texto en vectores numéricos ([ADR-0006](../docs/adr/0006-embeddings-locales-sin-ollama.md), [ADR-0017](../docs/adr/0017-embeddings-multilingues-y-balance-de-fuentes.md)).
 
 | Valor | Modelo | Dimensión | Cuándo usarlo |
 |---|---|---|---|
-| `local` (default) | ONNX `all-MiniLM-L6-v2` integrado en ChromaDB | 384 | Sin servicios; ~80 MB descargados la primera vez |
+| `multilingual` (default) | `paraphrase-multilingual-MiniLM-L12-v2` (fastembed, ONNX) | 384 | Consultas en español sobre guías en inglés y español; ~220 MB la primera vez |
+| `local` | ONNX `all-MiniLM-L6-v2` integrado en ChromaDB | 384 | Solo inglés: no encuentra la ADA con consultas en español (0 de 9) |
 | `ollama` | `nomic-embed-text` (`OLLAMA_EMBEDDING_MODEL`) | 768 | Si hay Ollama instalado (`ollama pull nomic-embed-text`) |
 
 Cambiar el proveedor requiere `--rebuild` (los vectores son incompatibles).
 
 **Medición de referencia (2026-09-24, `local`):** 2450 chunks, indexado en ~2.5 min en CPU; 10 consultas
 en español con palabras clave esperadas en el top-3 → 9/10 (falla "control de lípidos con estatinas").
+
+### Recuperación balanceada (`CANDIDATE_FACTOR`)
+`search_clinical_guidelines` pide `4×k` candidatos y devuelve `k` repartidos entre las guías (el mejor de cada una
+primero). Sin esto la Guía Nacional (~1.900 de ~3.600 fragmentos) copa el top-3. Con el corpus completo el top-3
+incluye la ADA en 7 de 10 consultas de prueba.
 
 ### `MIN_CHUNK_SIZE`
 Un corte en separador solo se acepta en la segunda mitad de la ventana (`CHUNK_SIZE // 2`). Antes

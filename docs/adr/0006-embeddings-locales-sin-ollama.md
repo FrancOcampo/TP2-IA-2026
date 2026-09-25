@@ -1,6 +1,6 @@
 # ADR-0006 · Embeddings locales en proceso por defecto y chunking con tamaño mínimo
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado (el embedding por defecto lo reemplaza el [ADR-0017](0017-embeddings-multilingues-y-balance-de-fuentes.md))
 - **Fecha:** 2026-09-24
 - **Relacionado:** [plan MVP](../plan_mvp.md) MVP-02 · F2-06 (puntos 2 y 3) · [ADR-0005](0005-historial-en-sqlite-local.md)
 

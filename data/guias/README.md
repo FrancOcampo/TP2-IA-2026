@@ -31,3 +31,6 @@ Las publica gratis *Diabetes Care* (vol. 47, suplemento 1): https://diabetesjour
    ([ADR-0013](../../docs/adr/0013-corpus-sin-ada-y-huella-del-indice.md)).
 
 Sin estos archivos el sistema funciona igual: las citas salen de las otras dos guías.
+
+Las consultas van en español y la ADA está en inglés: por eso el RAG usa embeddings multilingües
+([ADR-0017](../../docs/adr/0017-embeddings-multilingues-y-balance-de-fuentes.md)).
