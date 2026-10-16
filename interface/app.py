@@ -17,10 +17,12 @@ load_dotenv()
 
 import gradio as gr
 
+from agents.llm_factory import has_api_key, llm_status
 from orchestrator.graph import app as langgraph_app
 from interface.logging_config import setup_logging, get_callbacks, tracing_status
 from interface.components import (
     alerts_table,
+    execution_warning,
     eval_case_choices,
     eval_case_view,
     eval_history_summary_md,
@@ -36,6 +38,7 @@ from interface.components import (
     patient_profile,
     trends_view,
 )
+from tools.history_tools import get_patient_history
 from tools.patient_tools import get_medication_schedule, load_patient_data
 
 # Configura el logging propio (consola legible + logs/agent.jsonl) al iniciar.
@@ -80,7 +83,8 @@ def on_patient_change(patient_id: str) -> str:
             meds = get_medication_schedule(patient_id)
         except Exception:
             meds = None
-    return patient_profile(patient_id, metrics, meds)
+    history = get_patient_history(patient_id) if patient_id else None
+    return patient_profile(patient_id, metrics, meds, history)
 
 
 def analyze(patient_id: str, doctor_context: str):
@@ -102,16 +106,29 @@ def analyze(patient_id: str, doctor_context: str):
         err = f"⚠️ Error al ejecutar el análisis: {e}"
         return [{"role": "assistant", "content": err}], thread_id, format_report(None), alerts_table([]), trends_view(None)
 
+    # Paciente sin datos en el EHR: se informa y no se muestran alertas ni tendencias (ADR-0003)
+    error = out.get("error")
+    if error:
+        aviso = f"⚠️ {error}"
+        sin_datos = "_Sin análisis: no hay datos del paciente en el EHR._"
+        reporte = f"### {aviso}\n\nNo se generó reporte: el sistema no analiza pacientes sin datos."
+        return [{"role": "assistant", "content": aviso}], thread_id, format_report(reporte), sin_datos, sin_datos
+
     analysis = out.get("analysis")
     alerts = analysis.alerts if analysis else []
+    aviso = execution_warning(out.get("execution_mode"))
     chat = [{
         "role": "assistant",
         "content": (
             f"✅ Análisis de **{patient_id}** completado: {len(alerts)} alerta(s). "
             "El reporte está en el panel principal. Hacé tu pregunta de seguimiento abajo."
+            + (f"\n\n{aviso}" if aviso else "")
         ),
     }]
-    return chat, thread_id, format_report(out.get("report")), alerts_table(alerts), trends_view(analysis)
+    reporte = format_report(out.get("report"))
+    if aviso:
+        reporte = f"{aviso}\n\n{reporte}"
+    return chat, thread_id, reporte, alerts_table(alerts), trends_view(analysis)
 
 
 def follow_up(message: str, history: list, thread_id: str):
@@ -127,8 +144,19 @@ def follow_up(message: str, history: list, thread_id: str):
         return history, ""
 
     try:
+        before = langgraph_app.get_state(_config(thread_id)).values.get("active_patient_id")
         out = langgraph_app.invoke({"query": message}, _config(thread_id))
         reply = _last_assistant(out.get("conversation", []))
+        aviso = execution_warning(out.get("execution_mode"))
+        if aviso:
+            reply += f"\n\n{aviso}"
+        after = out.get("active_patient_id")
+        if before and after and after != before:
+            # El grafo cambió de paciente (ADR-0004), pero los paneles no se actualizan desde el chat.
+            reply += (
+                f"\n\n⚠️ **El análisis cambió de {before} a {after}.** Los paneles de reporte, alertas "
+                f"y tendencias siguen mostrando a {before}: seleccioná {after} y usá **Analizar paciente**."
+            )
     except Exception as e:
         reply = f"⚠️ Error: {e}"
 
@@ -144,16 +172,13 @@ def save_session(thread_id: str, history: list):
     if not thread_id:
         return history + [{"role": "assistant", "content": "No hay sesión activa para guardar."}]
     try:
-        langgraph_app.invoke({"query": "confirmar"}, _config(thread_id))
-        # NOTA: hoy la rama `save` del grafo termina en END sin persistir. La tool de escritura
-        # (tools/mongo_tools.update_patient_history) YA existe; falta cablear el nodo `save` en
-        # orchestrator/graph.py (pendiente del Orquestador). Ver docs/estado_proyecto.md.
-        msg = ("💾 Confirmación recibida. La persistencia en el historial todavía no está activa: "
-               "falta cablear la rama `save` del grafo a `update_patient_history` (pendiente del Orquestador).")
+        # Señal explícita (D5): no depende de interpretar texto.
+        out = langgraph_app.invoke({"save_requested": True, "query": "guardar sesión"}, _config(thread_id))
+        msg = _last_assistant(out.get("conversation", []))
     except Exception as e:
         msg = f"⚠️ Error al guardar: {e}"
     return history + [
-        {"role": "user", "content": "confirmar"},
+        {"role": "user", "content": "💾 Guardar sesión"},
         {"role": "assistant", "content": msg},
     ]
 
@@ -425,6 +450,8 @@ def build_demo() -> gr.Blocks:
             "</span></div>",
             elem_classes="tp2-header-wrap",
         )
+        # Modo de ejecución visible: sin API key los reportes son de los fallbacks determinísticos.
+        gr.Markdown(("🟢 " if has_api_key() else "⚠️ ") + llm_status())
 
         thread_state = gr.State("")
 
@@ -587,6 +614,10 @@ def build_demo() -> gr.Blocks:
 demo = build_demo()
 
 
+def launch(**kwargs) -> None:
+    """Lanza la UI. En Gradio 6 css y theme se pasan a launch() (ya no al constructor de Blocks)."""
+    demo.launch(theme=_THEME, css=_APP_CSS, **kwargs)
+
+
 if __name__ == "__main__":
-    # En Gradio 6 css y theme se pasan a launch() (ya no al constructor de Blocks).
-    demo.launch(theme=_THEME, css=_APP_CSS)
+    launch()

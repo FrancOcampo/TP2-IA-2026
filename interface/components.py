@@ -110,7 +110,9 @@ def alerts_table(alerts: list[Alert]) -> str:
 # Visualización de tendencias
 # -------------------------------------------------------------------
 
-def _trend_row(label: str, stats: MetricStats) -> str:
+def _trend_row(label: str, stats: Optional[MetricStats]) -> str:
+    if stats is None:  # métrica sin registros: no se inventan valores (ADR-0003)
+        return f"| {label} | — | — | — | — | — | sin datos |"
     arrow = _DIRECTION_ARROW.get(stats.direction, "")
     return (
         f"| {label} | {_fmt(stats.last_value)} | {_fmt(stats.mean)} | "
@@ -122,7 +124,8 @@ def _trend_row(label: str, stats: MetricStats) -> str:
 def trends_view(analysis: Optional[MonitorAnalysis]) -> str:
     """
     Tabla Markdown con las estadísticas por métrica (último, media, mín, máx, Δ, tendencia).
-    Devuelve un aviso si todavía no hay análisis del Monitor.
+    Devuelve un aviso si todavía no hay análisis del Monitor, y lista las métricas con datos
+    insuficientes para evaluar su evolución.
     """
     if analysis is None:
         return "_Sin análisis del Monitor todavía. Ejecutá un análisis para ver las tendencias._"
@@ -137,6 +140,11 @@ def trends_view(analysis: Optional[MonitorAnalysis]) -> str:
         _trend_row(METRIC_LABELS["blood_pressure_systolic"], analysis.blood_pressure_stats.systolic),
         _trend_row(METRIC_LABELS["blood_pressure_diastolic"], analysis.blood_pressure_stats.diastolic),
     ]
+    if analysis.insufficient_data:
+        filas.append("")
+        filas.append("⚠️ **Datos insuficientes para evaluar la evolución:**")
+        for metric, motivo in analysis.insufficient_data.items():
+            filas.append(f"- {METRIC_LABELS.get(metric, metric)}: {motivo}")
     return "\n".join(filas)
 
 
@@ -144,20 +152,60 @@ def trends_view(analysis: Optional[MonitorAnalysis]) -> str:
 # Perfil resumido del paciente
 # -------------------------------------------------------------------
 
+_FALLBACK_MOTIVOS = {
+    "rate_limit": "se agotó la cuota del proveedor del LLM (límite de tokens)",
+    "too_large": "el pedido superó el tamaño que admite el modelo",
+    "no_api_key": "no hay API key de LLM configurada en .env",
+    "error": "el LLM devolvió un error (ver logs/agent.jsonl)",
+}
+
+
+def execution_warning(execution_mode: Optional[dict]) -> str:
+    """
+    Aviso visible cuando algún agente cayó al fallback determinístico (F3-06). Devuelve "" si todos
+    los nodos usaron el LLM. Sin esto, una cuota agotada se ve como un reporte pobre sin explicación.
+    """
+    caidos = {node: mode for node, mode in (execution_mode or {}).items() if str(mode).startswith("fallback")}
+    if not caidos:
+        return ""
+    motivos = {m.split(":", 1)[1] if ":" in m else "error" for m in caidos.values()}
+    detalle = "; ".join(_FALLBACK_MOTIVOS.get(m, _FALLBACK_MOTIVOS["error"]) for m in sorted(motivos))
+    nodos = " y ".join(sorted(caidos))
+    return (f"⚠️ **El LLM no respondió ({nodos}): {detalle}.** Lo que ves es el resultado determinístico y "
+            "básico, sin interpretación clínica. Probá de nuevo en unos minutos.")
+
+
 def patient_profile(
     patient_id: str,
     metrics: Optional[PatientMetrics],
     medication: Optional[list[Medication]],
+    history: Optional[dict] = None,
 ) -> str:
     """
     Resumen del paciente para mostrar ANTES de lanzar el análisis (paso 2 del flujo).
-    Combina lo disponible del EHR (rango de fechas, último peso/PA) con la medicación activa.
+    Combina el perfil del historial (demografía, diagnósticos, comorbilidades, sesiones previas),
+    lo disponible del EHR (rango de fechas, último peso/PA) y la medicación activa.
     Degrada con elegancia si faltan datos.
     """
     if not patient_id:
         return "_Seleccioná un paciente para ver su perfil._"
 
     lineas = [f"### Paciente {patient_id}"]
+
+    if history and history.get("found"):
+        demo = history.get("demographics") or {}
+        if demo:
+            lineas.append(f"- **Edad / sexo**: {demo.get('age', '?')} años · {demo.get('sex', '?')}")
+        diagnoses = history.get("diagnoses") or []
+        if diagnoses:
+            lineas.append("- **Diagnósticos**: " + ", ".join(
+                f"{d.get('label')} ({d.get('code')}, desde {d.get('since')})" for d in diagnoses
+            ))
+        comorbidities = history.get("comorbidities") or []
+        lineas.append("- **Comorbilidades**: " + (", ".join(comorbidities) if comorbidities else "ninguna registrada"))
+        sessions = history.get("sessions") or []
+        if sessions:
+            lineas.append(f"- **Sesiones previas**: {len(sessions)} (última: {sessions[-1].get('date', '?')})")
 
     if metrics and metrics.dates:
         n = len(metrics.dates)

@@ -22,7 +22,6 @@
 import argparse
 import json
 import logging
-import os
 import sys
 import time
 from datetime import datetime
@@ -39,7 +38,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from agents.llm_factory import has_api_key
+from agents.llm_factory import active_model, has_api_key
 from orchestrator.graph import build_graph
 
 CASES_DIR = Path(__file__).parent / "cases"
@@ -59,13 +58,6 @@ def _load_all_cases() -> list[dict]:
     for category in CATEGORIES:
         cases.extend(json.loads((CASES_DIR / f"{category}.json").read_text(encoding="utf-8")))
     return cases
-
-
-def _active_model() -> tuple[str, str]:
-    """Proveedor y modelo activos (para registrar contra qué se evaluó)."""
-    provider = os.getenv("LLM_PROVIDER", "groq").lower()
-    default_model = "gemma-4-31b-it" if provider == "gemini" else "qwen/qwen3-32b"
-    return provider, os.getenv("LLM_MODEL", default_model)
 
 
 def _split_multi(values: list[str] | None) -> list[str]:
@@ -123,9 +115,8 @@ def _run_case(case: dict) -> dict:
     Corre setup + input sobre un thread aislado y devuelve la salida obtenida más
     metadatos del caso (reporte final, nº de alertas, duración, status y error si lo hubo).
 
-    El campo `report` del estado contiene la salida del Clínico tanto en modo reporte
-    como en modo seguimiento (en seguimiento se sobrescribe con la respuesta), así que
-    sirve como "salida obtenida" en ambos tipos de caso.
+    La "salida obtenida" es `followup_answer` si el último mensaje fue un seguimiento
+    (`is_followup`) y `report` si no: el seguimiento nunca pisa el reporte (D3, F1-03).
 
     `status`: "ok" si corrió todo con LLM; "degraded" si algún nodo cayó al fallback
     determinístico (el LLM falló: rate limit, 413, timeout…) y la salida NO refleja al modelo.
@@ -152,7 +143,10 @@ def _run_case(case: dict) -> dict:
     analysis = (final or {}).get("analysis")
     degraded = bool(capture.messages)
     return {
-        "obtained": (final or {}).get("report") or "(sin reporte)",
+        # Un error de dominio (p. ej. paciente sin datos, ADR-0003) ES la salida que ve el médico.
+        "obtained": (final or {}).get("error")
+                    or (final or {}).get("followup_answer" if (final or {}).get("is_followup") else "report")
+                    or "(sin respuesta)",
         "alerts_count": len(analysis.alerts) if analysis else None,
         "duration_s": duration,
         "status": "degraded" if degraded else "ok",
@@ -224,7 +218,7 @@ def main() -> None:
               "evaluación cualitativa no tendría sentido. Configurá GROQ_API_KEY/GOOGLE_API_KEY.")
         sys.exit(1)
 
-    provider, model = _active_model()
+    provider, model = active_model()
     out_path = args.output
 
     # Historial append-only: cargamos las corridas previas (salvo --overwrite) y al final

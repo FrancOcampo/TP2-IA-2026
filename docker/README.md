@@ -1,8 +1,13 @@
 # Infraestructura Docker — TP2
 
-MongoDB para el **historial de pacientes** (modo completo). Es el único servicio externo
-que corre en contenedor; el resto del stack (LLM Groq, embeddings Ollama, ChromaDB en
-disco) corre fuera de Docker.
+MongoDB **opcional** para el historial de pacientes. Por defecto el historial es un archivo
+SQLite local y no hace falta Docker ([ADR-0005](../docs/adr/0005-historial-en-sqlite-local.md)).
+Para usar Mongo, definí en `.env`:
+
+```bash
+HISTORY_BACKEND=mongo
+MONGO_URI=mongodb://127.0.0.1:27017
+```
 
 > Requisito: **Docker Desktop** abierto y corriendo.
 
@@ -33,7 +38,7 @@ Esto:
 Con el contenedor arriba y el entorno `uv` sincronizado:
 
 ```bash
-uv run python data/load_mongo.py    # carga los 4 pacientes (P001–P004)
+HISTORY_BACKEND=mongo uv run python data/load_history.py   # carga los pacientes de data/sample/
 ```
 
 ## Comandos útiles

@@ -34,10 +34,10 @@ Sigue el flujo de la def. conceptual (§2.4):
 5. **Seguimiento** (chat): preguntas sobre el reporte ya generado (van directo al Clínico).
    El Clínico responde **solo** dentro del dominio clínico del paciente; los pedidos ajenos
    (código, temas generales, etc.) se rechazan cortésmente.
-6. **Guardar sesión**: confirma la sesión (rama `save` del Orquestador). ⚠️ **La escritura
-   real en MongoDB todavía no está cableada**: la rama `save` del grafo termina en `END` sin
-   persistir. La tool `tools/mongo_tools.update_patient_history` ya existe; falta conectar el
-   nodo `save` en `orchestrator/graph.py` (pendiente del Orquestador, ver `docs/estado_proyecto.md`).
+6. **Guardar sesión**: envía la señal explícita `save_requested=True`. El nodo `save` del grafo
+   persiste reporte, alertas y últimos valores de cada métrica en el historial, y el chat muestra el
+   resultado real: el id de la sesión o el error. En el chat también sirven "confirmar" o
+   "guardar sesión"; "sí" no guarda ([ADR-0008](adr/0008-guardado-explicito-de-sesion.md)).
 
 ## Pestaña 2 — Observabilidad (dev)
 

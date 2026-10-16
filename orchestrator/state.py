@@ -1,5 +1,5 @@
 from typing import TypedDict, Optional, Annotated
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from datetime import date
 import operator
 
@@ -94,9 +94,9 @@ class MetricStats(BaseModel):
 
 
 class BloodPressureStats(BaseModel):
-    """Estadísticas de presión arterial (dos series: sistólica y diastólica)."""
-    systolic: MetricStats
-    diastolic: MetricStats
+    """Estadísticas de presión arterial (dos series: sistólica y diastólica). None = sin registros."""
+    systolic: Optional[MetricStats] = None
+    diastolic: Optional[MetricStats] = None
 
 
 # -------------------------------------------------------------------
@@ -113,17 +113,30 @@ class Alert(BaseModel):
 
 
 class MonitorAnalysis(BaseModel):
-    """Output estructurado del Agente Monitor."""
-    glucose_fasting_stats: MetricStats
-    hba1c_stats: MetricStats
-    glucose_postprandial_stats: MetricStats
-    weight_stats: MetricStats
+    """
+    Output estructurado del Agente Monitor.
+
+    Nunca se inventan valores (ADR-0003): una métrica sin registros tiene stats `None`, y las
+    métricas con menos de 2 registros (sin tendencia evaluable) figuran en `insufficient_data`.
+    """
+    glucose_fasting_stats: Optional[MetricStats] = None
+    hba1c_stats: Optional[MetricStats] = None
+    glucose_postprandial_stats: Optional[MetricStats] = None
+    weight_stats: Optional[MetricStats] = None
     blood_pressure_stats: BloodPressureStats
     cgm_metrics: Optional[CGMMetrics] = None  # None si el paciente no tiene CGM
     alerts: list[Alert]
     medication: list[Medication]
     requires_rag: bool                    # hay alertas moderadas o severas
     requires_longitudinal_comparison: bool  # hay métricas que ameritan comparar con sesiones anteriores
+    insufficient_data: dict[str, str] = Field(default_factory=dict)  # métrica → motivo
+    records_count: int = 0                # registros del EHR analizados (dentro de analysis_window)
+    # Ventana principal del análisis (D7): stats, alertas e insufficient_data la usan toda.
+    analysis_window: TimeRange = Field(default_factory=TimeRange)
+    # Stats pedidas por el LLM con otra ventana, sin mezclarse con las principales ("metric@ventana").
+    extra_windows: dict[str, MetricStats] = Field(default_factory=dict)
+    # Criterio del LLM del Monitor (ventana/foco elegidos); auditable, no se usa para cálculos (F3-03).
+    monitor_notes: Optional[str] = None
 
 
 # -------------------------------------------------------------------
@@ -134,6 +147,7 @@ class AgentState(TypedDict):
 
     # -- Identificación del paciente --
     patient_id: str
+    active_patient_id: Optional[str]  # paciente del análisis en curso; lo escribe SOLO el Orquestador (D4)
 
     # -- Mensaje actual del médico --
     query: str            # consulta/pregunta actual (consumida por los templates)
@@ -156,13 +170,21 @@ class AgentState(TypedDict):
 
     # -- Reporte generado por el Agente Clínico --
     # has_report se deriva de (report is not None) al formatear el template del Orquestador
-    report: Optional[str]
+    report: Optional[str]           # reporte de la sesión: SOLO lo escribe el modo reporte (D3)
+    followup_answer: Optional[str]  # respuesta del modo seguimiento; nunca pisa `report` (D3)
+    report_structured: Optional[dict]  # ClinicalReport (agents/report.py) serializado; alimenta el guardado (F3-04)
 
     # -- Control del grafo --
     iteration: int        # contador para el guardrail (máx 3)
     is_followup: bool     # True si es pregunta de seguimiento, False si es consulta nueva
-    awaiting_confirmation: bool  # True si se espera confirmación del médico para guardar sesión
+    save_requested: bool  # señal EXPLÍCITA de guardado (botón o "confirmar"/"guardar sesión"); D5
+    save_result: Optional[dict]  # {"ok": bool, "session_id"?: str, "error"?: str} del último guardado
+    analysis_query: Optional[str]  # consulta que originó el análisis/reporte vigente (se persiste al guardar)
     information_sufficient: bool  # señal del Clínico: False → el Orquestador reenvía al Monitor (loop de refinamiento)
+    # Cómo corrió cada nodo (F3-06): {"monitor": "llm" | "fallback:<motivo>", "clinical": ...}. El motivo es
+    # no_api_key | rate_limit | too_large | error. La UI avisa cuando un nodo cayó al fallback.
+    execution_mode: dict[str, str]
+    error: Optional[str]  # error de dominio para el médico (p. ej. paciente sin datos); corta el flujo (ADR-0003)
 
     # -- Conversación médico ↔ sistema --
     conversation: Annotated[list[dict], operator.add]

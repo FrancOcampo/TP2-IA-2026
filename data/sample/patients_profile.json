@@ -1,0 +1,89 @@
+{
+  "P001": {
+    "demographics": { "age": 54, "sex": "F" },
+    "diagnoses": [ { "code": "E11", "label": "Diabetes mellitus tipo 2", "since": "2019" } ],
+    "comorbidities": [],
+    "sessions": []
+  },
+  "P002": {
+    "demographics": { "age": 61, "sex": "M" },
+    "diagnoses": [ { "code": "E11", "label": "Diabetes mellitus tipo 2", "since": "2016" } ],
+    "comorbidities": [ "Sobrepeso", "Dislipidemia" ],
+    "sessions": [
+      {
+        "session_id": "seed-P002-2025-03",
+        "date": "2025-03-20",
+        "saved_at": "2025-03-20T12:00:00+00:00",
+        "query": "Control trimestral",
+        "doctor_context": "",
+        "report_summary": "[Sesión semilla, datos sintéticos] HbA1c 6.4 %, glucemias en meta. Se mantiene el tratamiento.",
+        "alerts": [],
+        "metrics_summary": { "glucose_fasting": 108.0, "hba1c": 6.4, "glucose_postprandial": 155.0, "weight": 86.0, "blood_pressure_systolic": 127.0, "blood_pressure_diastolic": 83.0 },
+        "seed": true
+      },
+      {
+        "session_id": "seed-P002-2025-06",
+        "date": "2025-06-20",
+        "saved_at": "2025-06-20T12:00:00+00:00",
+        "query": "Control trimestral",
+        "doctor_context": "",
+        "report_summary": "[Sesión semilla, datos sintéticos] HbA1c 6.9 %, en el límite de la meta; glucemias en ascenso. Se refuerza plan alimentario y se agrega empagliflozina.",
+        "alerts": [],
+        "metrics_summary": { "glucose_fasting": 125.0, "hba1c": 6.9, "glucose_postprandial": 175.0, "weight": 87.0, "blood_pressure_systolic": 130.0, "blood_pressure_diastolic": 84.0 },
+        "seed": true
+      },
+      {
+        "session_id": "seed-P002-2025-09",
+        "date": "2025-09-20",
+        "saved_at": "2025-09-20T12:00:00+00:00",
+        "query": "Control trimestral",
+        "doctor_context": "Refiere baja adherencia a la dieta.",
+        "report_summary": "[Sesión semilla, datos sintéticos] HbA1c 7.5 %, fuera de meta; ayunas y postprandial fuera de meta. Se evalúa intensificar el tratamiento.",
+        "alerts": [],
+        "metrics_summary": { "glucose_fasting": 138.0, "hba1c": 7.5, "glucose_postprandial": 192.0, "weight": 89.0, "blood_pressure_systolic": 133.0, "blood_pressure_diastolic": 86.0 },
+        "seed": true
+      }
+    ]
+  },
+  "P003": {
+    "demographics": { "age": 72, "sex": "F" },
+    "diagnoses": [ { "code": "E11", "label": "Diabetes mellitus tipo 2", "since": "2012" } ],
+    "comorbidities": [ "Hipotiroidismo" ],
+    "sessions": [
+      {
+        "session_id": "seed-P003-2025-04",
+        "date": "2025-04-20",
+        "saved_at": "2025-04-20T12:00:00+00:00",
+        "query": "Control semestral",
+        "doctor_context": "",
+        "report_summary": "[Sesión semilla, datos sintéticos] HbA1c 6.1 %, buen control. Sin hipoglucemias registradas.",
+        "alerts": [],
+        "metrics_summary": { "glucose_fasting": 91.0, "hba1c": 6.1, "glucose_postprandial": 138.0, "weight": 68.0, "blood_pressure_systolic": 122.0, "blood_pressure_diastolic": 79.0 },
+        "seed": true
+      },
+      {
+        "session_id": "seed-P003-2025-09",
+        "date": "2025-09-20",
+        "saved_at": "2025-09-20T12:00:00+00:00",
+        "query": "Control semestral",
+        "doctor_context": "Refiere un episodio de mareo en agosto.",
+        "report_summary": "[Sesión semilla, datos sintéticos] HbA1c 6.1 %, buen control. Hipoglucemia en ayunas de 55 mg/dL en agosto.",
+        "alerts": [],
+        "metrics_summary": { "glucose_fasting": 91.0, "hba1c": 6.1, "glucose_postprandial": 138.0, "weight": 68.0, "blood_pressure_systolic": 122.0, "blood_pressure_diastolic": 79.0 },
+        "seed": true
+      }
+    ]
+  },
+  "P004": {
+    "demographics": { "age": 47, "sex": "M" },
+    "diagnoses": [ { "code": "E11", "label": "Diabetes mellitus tipo 2", "since": "2025" } ],
+    "comorbidities": [],
+    "sessions": []
+  },
+  "P005": {
+    "demographics": { "age": 58, "sex": "M" },
+    "diagnoses": [ { "code": "E11", "label": "Diabetes mellitus tipo 2", "since": "2010" } ],
+    "comorbidities": [ "Hipertensión arterial", "Obesidad" ],
+    "sessions": []
+  }
+}

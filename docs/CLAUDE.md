@@ -19,7 +19,7 @@ tipo 2 (TP2 de Inteligencia Artificial 2026). No emite diagnósticos: produce re
 soporte a la decisión médica. Tres agentes coordinados sobre LangGraph:
 
 - **Orquestador** — enruta por inferencia de intención y gestiona el loop de refinamiento.
-- **Monitor** — análisis cuantitativo con tools determinísticas (stats, umbrales ADA).
+- **Monitor** — análisis cuantitativo con tools determinísticas (stats, metas de control DM2).
 - **Clínico** — interpreta hallazgos con RAG sobre guías clínicas + historial del paciente.
 
 Documentos fuente: [docs/TP_2 Agente.md](docs/TP_2%20Agente.md) (enunciado) y
@@ -33,14 +33,15 @@ código. Ver también [docs/logs.md](docs/logs.md) (cómo leer las trazas/observ
 
 - **uv** gestiona el entorno (instalado en `C:\Users\marco\.local\bin`; en terminales
   nuevas ya está en el PATH).
-- LLM: Groq `llama-3.3-70b` · Embeddings: Ollama `nomic-embed-text` · Vector store:
-  ChromaDB (solo guías) · Historial: **MongoDB** documental · Validación: Pydantic v2 ·
+- LLM: Groq `openai/gpt-oss-120b` por defecto (ADR-0014; free tier: 8000 tokens/min y 200k/día por modelo) con respaldo `gpt-oss-20b` (`LLM_FALLBACK_MODELS`, ADR-0016) (`LLM_PROVIDER`/`LLM_MODEL`; defaults en `agents/llm_factory.DEFAULT_MODELS`; Gemini acepta `GOOGLE_API_KEY` o `GEMINI_API_KEY`) · Embeddings: **multilingües locales en proceso** (fastembed `paraphrase-multilingual-MiniLM-L12-v2`; `local` y Ollama opcionales vía `EMBEDDING_PROVIDER`, ADR-0017) · Vector store:
+  ChromaDB (solo guías) · Historial: **SQLite local** por defecto, MongoDB opcional (`HISTORY_BACKEND`, ADR-0005) · Validación: Pydantic v2 ·
   Interfaz: **Gradio** (decisión del equipo; la dependencia `streamlit` sigue en
   `pyproject.toml` pero no se usa) · Observabilidad: **LangSmith + logging propio**
   (consola legible + `logs/agent.jsonl`).
 
 ```bash
 uv sync                 # instalar/actualizar entorno
+uv run python main.py   # bootstrap (historial SQLite + índice RAG si faltan) y UI en :7860
 uv run pytest           # correr la suite (config en pyproject: pythonpath=["."], testpaths=["tests"])
 uv lock                 # regenerar lockfile tras cambiar dependencias
 ```
@@ -60,7 +61,7 @@ uv lock                 # regenerar lockfile tras cambiar dependencias
 - [agents/prompts.py](agents/prompts.py) — system + human prompts de los 3 agentes.
 - [agents/monitor.py](agents/monitor.py) — Agente Monitor real (Integrante A). Loop ReAct:
   wrappea las 4 tools de C como `@tool` de LangChain, las bindea a `ChatGroq`
-  (`llama-3.3-70b`), ejecuta el loop de razonamiento, y ensambla `MonitorAnalysis`
+  (default en `llm_factory.DEFAULT_MODELS`), ejecuta el loop de razonamiento, y ensambla `MonitorAnalysis`
   programáticamente. Si no hay `GROQ_API_KEY`, cae a un fallback determinístico
   (ejecuta las tools directamente sin LLM).
 - [interface/logging_config.py](interface/logging_config.py) — observabilidad (Integrante D).
@@ -79,7 +80,8 @@ uv lock                 # regenerar lockfile tras cambiar dependencias
   `window_metrics` es el **único** lugar del recorte temporal; `_compute_stats` es el núcleo
   puro testeable con listas. Leen de `data/sample/` hasta que B entregue Mongo/generador real.
 - [tools/threshold_tools.py](tools/threshold_tools.py) — `detect_threshold_violations(patient_id,
-  metric, timerange=None)` (→ `list[Alert]`) con `ADA_THRESHOLDS` (tabla §2.6). Detecta **hiper
+  metric, timerange=None)` (→ `list[Alert]`) con `THRESHOLDS` = `DM2_CONTROL_THRESHOLDS` (metas de
+  control, ADR-0011; bandas `Band` con comparador y fuente; `ADA_DIAGNOSTIC_THRESHOLDS` sin uso). Detecta **hiper
   e hipoglucemia**: bandas alta y baja, severidad `moderada`/`severa`. Núcleo puro
   `_detect_violations(metric, values, dates)`. Glucemias con ambas bandas; HbA1c solo alta;
   peso/presión sin umbral (ver caveats en el README).
@@ -117,12 +119,14 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
 1. **Routing por inferencia de intención**, no por skills `/monitor` `/clinico`. El
    Orquestador lee `state["query"]` + estado y decide: pipeline completo / seguimiento
    directo al Clínico / reset / confirmación / aclaración.
-2. **Historial del paciente en MongoDB** (documento por paciente, búsqueda exacta por id,
-   **sin RAG**). RAG es exclusivo de las guías clínicas.
+2. **Historial del paciente en un almacén documental** (documento por paciente, búsqueda exacta por id,
+   **sin RAG**). Motor detrás de `HistoryStore`: SQLite local por defecto, MongoDB opcional (ADR-0005). RAG es exclusivo de las guías clínicas.
 3. **CGM = extensión futura/opcional**. `CGMMetrics`/`cgm_series` están definidos pero
    fuera del alcance de la implementación actual; marcado así en la def. conceptual.
-4. **Loop de refinamiento**: el Clínico expone `information_sufficient`; si es `False` e
-   `iteration < 3`, el grafo vuelve al Monitor (`decide_next`). Guardrail = 3 iteraciones.
+4. **Loop de refinamiento**: `information_sufficient` lo fija el nodo Clínico con un criterio
+   determinístico sobre el análisis (ADR-0010: hay `insufficient_data` y la ventana es acotada);
+   si es `False` e `iteration < 3`, el grafo vuelve al Monitor (`decide_next`), que re-analiza con
+   la ventana global. Guardrail = 3 iteraciones.
    El contador se reinicia en el Orquestador en cada mensaje nuevo (por eso el loop NO
    vuelve por el nodo orquestador, para no resetear `iteration`).
 5. **Modelos tipados** en vez de `dict`/`list[str]`: `Medication`, `MetricStats`,
@@ -148,6 +152,21 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
     BAJA además de la alta. Hipoglucemia ADA: `< 70` mg/dL → `moderada`, `< 54` → `severa`
     (glucemias en ayunas y postprandial; HbA1c no tiene banda baja). Vigilar hipoglucemias es
     central en el seguimiento de un diabético y antes el sistema era ciego a ellas.
+12. **Metas de control, no criterios diagnósticos** (D1, ADR-0011): todos los pacientes ya tienen
+    DM2, así que la banda alta usa metas de control (HbA1c ≥ 7 / > 9, ayunas > 130 / > 300,
+    postprandial ≥ 180 / > 300). Cada banda declara comparador y fuente. Validada por el
+    equipo el 2026-09-25.
+
+13. **Modo de los agentes** (ADR-0015): `AGENT_MODE=lean` (default, free tier) hace el Monitor en
+    1 llamada estructurada y precarga historial y comparación para el Clínico; `react` usa los loops
+    completos. El contexto que va a los LLM siempre pasa por `agents/context.py` (compacto).
+
+14. **Reporte estructurado y anclado** (ADR-0019): el Clínico devuelve un `ClinicalReport` (JSON) con la
+    interpretación de cada grupo de alertas y `fragment_ids`; el código arma el Markdown (`agents/report.py`) con
+    citas resueltas por id, cifras validadas y disclaimer siempre presente.
+
+15. **Proveedores de LLM** (ADR-0020): `groq`, `gemini`, `openrouter` y `openai_compat` (cualquier API compatible con OpenAI), con
+    cadena de respaldo entre proveedores (`LLM_FALLBACK_MODELS=proveedor:modelo`) y tiempo máximo por llamada.
 
 ## Convenciones
 
@@ -161,10 +180,10 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
 | Módulo | Estado |
 |---|---|
 | `state.py`, `prompts.py` | ✅ completos y verificados |
-| `graph.py`, `router.py` | ✅ grafo funcional end-to-end; Monitor y Clínico reales; routing heurístico |
+| `graph.py`, `router.py` | ✅ grafo funcional end-to-end; Monitor y Clínico reales; routing heurístico con **paciente activo** (`active_patient_id`): el cambio de paciente o el reinicio limpian el estado derivado (ADR-0004) |
 | `agents/monitor.py` | ✅ **Agente Monitor real**: loop ReAct (ChatGroq + 4 tools LangChain), fallback determinístico sin API key, produce `MonitorAnalysis` |
 | `agents/clinical.py` | ✅ **Agente Clínico real**: loop ReAct (ChatGroq + 3 tools LangChain), fallback determinístico sin API key, modos reporte/seguimiento |
-| Tools del Monitor (EHR/umbrales) + `data/sample/` | ✅ `patient_tools.py` y `threshold_tools.py` listos y testeados; envueltas como `@tool` LangChain en `agents/monitor.py`; CSVs P001–P004 creados |
+| Tools del Monitor (EHR/umbrales) + `data/sample/` | ✅ `patient_tools.py` y `threshold_tools.py` listos y testeados; envueltas como `@tool` LangChain en `agents/monitor.py`; CSVs P001–P005 creados |
 | Testing (estrategia) | ✅ organizado por objetivo; ver **[docs/tests.md](docs/tests.md)** (tools / plomería / calidad de la IA) |
 | `tests/test_graph.py` | ✅ plomería del grafo en 2 modos: determinístico (fallback forzado, gate de CI) + estocástico (`llm`, LLM real, aserciones laxas) |
 | `tests/test_monitor_tools.py` | ✅ tools del Monitor, determinístico sobre `data/sample/*.csv` |
@@ -172,14 +191,14 @@ el LLM razona el *qué* y el *hasta cuándo*; el cálculo es 100% determinístic
 | Observabilidad (`interface/logging_config.py`) | ✅ logging dual (consola + JSONL) + LangSmith; tracea nodos, routing, `llm_*` y `tool_*` (con nombre de tool y tokens) |
 | `interface/app.py` (Gradio) | ✅ UI completa: 3 pestañas (Consulta clínica + Observabilidad dev + Evaluación) contra el grafo real |
 | `tests/conftest.py`, `.env.example` (LangSmith) | ✅ `load_dotenv` + vars de tracing |
-| Tools de Mongo (`get_patient_history`, `compare_*`, `update_*`) | ✅ `tools/mongo_tools.py` real implementado (B); conectado al Agente Clínico |
-| `data/generate_patients.py` | ✅ 4 perfiles sintéticos (P001–P004) generando CSVs en `data/sample/` |
-| MongoDB (schema + instancia + carga) | ✅ instancia en `localhost:27017` vía **Docker Compose** (`docker/docker-compose.yml`, contenedor `tp2-mongo`, volumen persistente, init script) **o** local nativo; `data/load_mongo.py` carga los 4 pacientes en `tp2_diabetes.patients` |
-| RAG — ingestión (`rag/ingest.py`) | ✅ chunking + embeddings `nomic-embed-text` + ChromaDB persistido en `data/chroma_db/`; parámetros tunables en `rag/RAG_TUNING.md` |
+| Tools de historial (`get_patient_history`, `compare_*`, `update_*`) | ✅ `tools/history_tools.py` sobre `HistoryStore` (`tools/history_store.py`: SQLite por defecto, Mongo opcional; ADR-0005); conectado al Agente Clínico |
+| `data/generate_patients.py` | ✅ 5 perfiles sintéticos (P001–P005; P005 = descompensación severa) generando CSVs en `data/sample/` |
+| Historial (schema + carga) | ✅ `data/load_history.py` carga los pacientes de `data/sample/` en el almacén (`data/tp2.db` por defecto; idempotente, conserva sesiones). MongoDB opcional vía Docker Compose (`docker/`) |
+| RAG — ingestión (`rag/ingest.py`) | ✅ chunking (con tamaño mínimo por corte) + embeddings locales + ChromaDB persistido en `data/chroma_db/`; idempotente (upsert) y `--rebuild`; metadata `section`; config compartida en `rag/config.py`; parámetros en `rag/RAG_TUNING.md` |
 | RAG — retrieval (`rag/retriever.py`) | ✅ `search_clinical_guidelines()` + `get_rag_fragment()`; probar con `uv run python rag/retriever.py` |
 | RAG — tools LangChain (`tools/rag_tools.py`) | ✅ `search_clinical_guidelines_tool` y `get_rag_context_tool` listos para el Agente Clínico (C) |
 | `interface/components.py` | ✅ funciones puras de render (alertas, tendencias, perfil, reporte, visor de logs, visor de evaluación); testeables sin Gradio |
-| `tests/test_clinico_tools.py` | ✅ tools del Clínico (mongo_tools + RAG), integración (`@pytest.mark.integration`); requieren MongoDB+Ollama+ChromaDB |
+| `tests/test_clinico_tools.py`, `tests/test_history_store.py` | ✅ historial determinístico (SQLite temporal por test, `conftest.py`); RAG como integración (`@pytest.mark.integration`, requiere el índice de ChromaDB); ingesta determinística en `tests/test_rag_ingest.py` |
 | `tests/cases/*.json` + `tests/eval_runner.py` | ✅ evaluación **cualitativa** de la IA (9 casos: 3 happy / 3 edge / 3 adversarial); script (no pytest) que vuelca `logs/eval_report.json` con esperado vs. obtenido; se lee desde la pestaña **Evaluación** de la UI Gradio (selector de corrida + caso) para comparar a ojo (germen del LLM-as-judge). Flags `-c/--category`, `--case`, `--list`, `--overwrite`; el JSON es un **historial append-only** (cada corrida = un elemento del array) para correr de a un caso sin agotar tokens. Cada caso lleva `status` (`ok`/`degraded`/`error`): **`degraded`** = el LLM falló y el grafo cayó al fallback determinístico (salida que NO refleja al modelo), detectado capturando los errores de `orchestrator.graph` |
 
 ## División de trabajo
@@ -208,14 +227,16 @@ Coordinación crítica:
 
 ## Próximos pasos
 
+> **Fuente de verdad de las correcciones pendientes: [docs/plan_correcciones.md](plan_correcciones.md)**
+> (revisión del 2026-09-15, fases F0–F4). Si esta lista lo contradice, manda el plan.
+> **Prioridad actual: [docs/plan_mvp.md](plan_mvp.md)** (qué entra al MVP y en qué orden).
+
 1. ~~Reemplazar el stub del Monitor por agente real~~ **✅ HECHO**
 2. ~~Implementar `agents/clinical.py` (Agente Clínico real) e integrar en `graph.py`~~ **✅ HECHO**
 3. ~~Conectar MongoDB real y RAG real (B)~~ **✅ HECHO** (merge `dev/B`; stubs eliminados).
 4. ~~Completar la interfaz Gradio + `interface/components.py`~~ **✅ HECHO** (merge UI).
-5. Agregar el nodo de persistencia (**Integrante A / Orquestador**): rama `save` → `update_patient_history`
-   (hoy `save` termina en `END` sin persistir). La tool `tools/mongo_tools.update_patient_history` ya existe
-   (B/C); falta solo cablear el nodo en `graph.py`. Marcado con `TODO` en `route_from_orchestrator`.
+5. ~~Agregar el nodo de persistencia~~ **✅ HECHO** (F1-04, ADR-0008): nodo `save` → `update_patient_history`.
 6. Reemplazar la heurística de `router.py` por clasificación vía LLM.
 7. ~~Completar el harness de evaluación de D~~ **✅ HECHO**: evaluación cualitativa con `tests/eval_runner.py` + `tests/cases/*.json` (ver [docs/tests.md](docs/tests.md)).
-8. **Detección de "datos insuficientes" en el Agente Clínico real** (A/C): hoy solo el fallback la detecta (P004). No es ya un problema de tests —el gate de `test_graph.py` corre en modo determinístico— sino una brecha de comportamiento del agente; conviene cerrarla para que el loop de refinamiento se dispare también con LLM real.
+8. ~~Detección de "datos insuficientes" en el Agente Clínico real~~ **✅ HECHO** (F1-06, ADR-0010): criterio determinístico común (`information_sufficient_for`); la versión estructurada con LLM es F3-02.
 ```

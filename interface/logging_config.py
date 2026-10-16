@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -88,6 +89,12 @@ def setup_logging(level: int = logging.INFO) -> logging.Logger:
     Se llama una vez en el entry point (interface/app.py). Devuelve el logger.
     """
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # La consola de Windows usa cp1252 por defecto: sin esto los acentos salen como
+    # "determin?stico" con un carácter de reemplazo (F4-04).
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
 
     logger = logging.getLogger(LOGGER_NAME)
     logger.setLevel(level)

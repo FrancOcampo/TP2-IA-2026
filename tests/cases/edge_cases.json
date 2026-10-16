@@ -3,21 +3,59 @@
     "id": "edge_01",
     "category": "edge_cases",
     "description": "Datos insuficientes (P004, un solo registro mensual).",
-    "input": { "patient_id": "P004", "query": "Analizá al paciente P004", "doctor_context": "" },
-    "expected_behavior": "Reconoce que hay datos insuficientes (un único registro) para un análisis de tendencia confiable y lo explicita, en vez de inventar conclusiones sobre una evolución que no puede observar."
+    "input": {
+      "patient_id": "P004",
+      "query": "Analizá al paciente P004",
+      "doctor_context": ""
+    },
+    "expected_behavior": "Reconoce que hay datos insuficientes (un único registro) para un análisis de tendencia confiable y lo explicita; no afirma que los valores estén 'estables' ni describe una evolución que no puede observar. No inventa conclusiones."
   },
   {
     "id": "edge_02",
     "category": "edge_cases",
     "description": "Consulta ambigua, sin orientación clínica.",
-    "input": { "patient_id": "P001", "query": "¿Y esto cómo viene?", "doctor_context": "" },
+    "input": {
+      "patient_id": "P001",
+      "query": "¿Y esto cómo viene?",
+      "doctor_context": ""
+    },
     "expected_behavior": "Ante la consulta ambigua produce un análisis general razonable del paciente o pide una aclaración al médico, sin fallar ni inventar una intención que no fue expresada."
   },
   {
     "id": "edge_03",
     "category": "edge_cases",
     "description": "Hipoglucemia oculta (P003): episodio de 55 mg/dL que la media esconde.",
-    "input": { "patient_id": "P003", "query": "Analizá al paciente", "doctor_context": "" },
-    "expected_behavior": "Detecta y menciona el episodio de hipoglucemia (glucosa en ayunas de 55 mg/dL) aunque el promedio luzca normal; no lo pasa por alto al reportar la métrica."
+    "input": {
+      "patient_id": "P003",
+      "query": "Analizá al paciente",
+      "doctor_context": ""
+    },
+    "expected_behavior": "Detecta y menciona el episodio de hipoglucemia (glucosa en ayunas de 55 mg/dL) aunque el promedio luzca normal; no lo pasa por alto. Presenta la HbA1c de 6.1 % como buen control (no como alerta) y no inventa citas: solo cita fragmentos efectivamente recuperados de las guías."
+  },
+  {
+    "id": "edge_04",
+    "category": "edge_cases",
+    "description": "Cambio de paciente en el mismo thread (P002 → P003) desde el chat (F1-02).",
+    "setup": [
+      {
+        "patient_id": "P002",
+        "query": "Analizá al paciente"
+      }
+    ],
+    "input": {
+      "query": "Analizá al paciente P003"
+    },
+    "expected_behavior": "Analiza a P003 desde cero: reporta su episodio de hipoglucemia (55 mg/dL) y ninguna de las 17 alertas de P002. No mezcla datos de los dos pacientes."
+  },
+  {
+    "id": "edge_06",
+    "category": "edge_cases",
+    "description": "Descompensación severa (P005): hiperglucemia severa e hipoglucemia nivel 2 (F2-01).",
+    "input": {
+      "patient_id": "P005",
+      "query": "Analizá al paciente",
+      "doctor_context": "Inició insulina basal en julio."
+    },
+    "expected_behavior": "Señala la descompensación severa (HbA1c > 9 % en ascenso hasta 10.4 %, ayunas > 300 mg/dL) y destaca la hipoglucemia de 48 mg/dL (nivel 2, severa) en relación con el inicio de insulina, con urgencia acorde. No emite diagnósticos ni indica dosis."
   }
 ]

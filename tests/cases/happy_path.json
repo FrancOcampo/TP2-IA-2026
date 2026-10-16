@@ -3,24 +3,37 @@
     "id": "happy_01",
     "category": "happy_path",
     "description": "Paciente controlado (P001): HbA1c estable, sin alertas.",
-    "input": { "patient_id": "P001", "query": "Analizá al paciente", "doctor_context": "" },
+    "input": {
+      "patient_id": "P001",
+      "query": "Analizá al paciente",
+      "doctor_context": ""
+    },
     "expected_behavior": "Identifica al paciente como metabólicamente controlado (HbA1c ~5.2% estable, glucemias normales), sin alertas, y sugiere continuar el plan actual. Mantiene el tono de soporte (no diagnóstico) con el disclaimer."
   },
   {
     "id": "happy_02",
     "category": "happy_path",
     "description": "Deterioro progresivo de HbA1c (P002): tendencia ascendente sostenida.",
-    "input": { "patient_id": "P002", "query": "Analizá la evolución del paciente", "doctor_context": "" },
-    "expected_behavior": "Detecta el deterioro progresivo: HbA1c en ascenso sostenido hasta 8.2% y glucemias en aumento, y lo señala como descontrol que requiere atención. Si el RAG está activo, respalda la interpretación con las guías clínicas."
+    "input": {
+      "patient_id": "P002",
+      "query": "Analizá la evolución del paciente",
+      "doctor_context": ""
+    },
+    "expected_behavior": "Detecta el deterioro progresivo: HbA1c en ascenso sostenido hasta 8.2% y glucemias en aumento, con 17 alertas moderadas contra las metas de control de DM2 (HbA1c ≥ 7 %, ayunas > 130, postprandial ≥ 180) y ninguna severa. Compara con la sesión anterior (HbA1c 7.5 % → 8.2 %, +0.7) sin inventar fechas, y respalda la interpretación con fragmentos recuperados de las guías."
   },
   {
     "id": "happy_03",
     "category": "happy_path",
     "description": "Seguimiento sobre un reporte previo (P002): pregunta directa al Clínico.",
     "setup": [
-      { "patient_id": "P002", "query": "Analizá al paciente" }
+      {
+        "patient_id": "P002",
+        "query": "Analizá al paciente"
+      }
     ],
-    "input": { "query": "¿Qué significa la HbA1c?" },
+    "input": {
+      "query": "¿Qué significa la HbA1c?"
+    },
     "expected_behavior": "Responde la pregunta de forma clara y contextualizada al paciente actual, sin recalcular todo el análisis ni repetir el reporte completo. Mantiene el rol de soporte."
   }
 ]
